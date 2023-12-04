@@ -112,10 +112,11 @@ def set_description(message):
 
 @bot.message_handler(content_types=["text"])
 def text_handler(message):
-    if not update_user_cache(message):
-        bot.send_message(message.from_user.id, "To authorize, write /authorization")
-        return
-    client = OpenAI(api_key=users_cache[message.from_user.id]["KEY"][0])
+    # if not update_user_cache(message):
+    #     bot.send_message(message.from_user.id, "To authorize, write /authorization")
+    #     return
+    # users_cache[message.from_user.id]["KEY"][0]
+    client = OpenAI(api_key='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')
 
     completion = client.chat.completions.create(
         model=users_cache[message.from_user.id]["settings"]["model"],
