@@ -116,7 +116,7 @@ def text_handler(message):
     #     bot.send_message(message.from_user.id, "To authorize, write /authorization")
     #     return
     # users_cache[message.from_user.id]["KEY"][0]
-    client = OpenAI(api_key='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')
+    client = OpenAI(api_key='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')
 
     completion = client.chat.completions.create(
         model="gpt-3.5-turbo",
