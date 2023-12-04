@@ -108,24 +108,31 @@ def set_description(message):
     global users_cache
     users_cache[message.from_user.id]["settings"]["role"] = message.text
     bot.send_message(message.from_user.id, "OK")
-
+T = ""
 
 @bot.message_handler(content_types=["text"])
 def text_handler(message):
-    # if not update_user_cache(message):
-    #     bot.send_message(message.from_user.id, "To authorize, write /authorization")
-    #     return
-    # users_cache[message.from_user.id]["KEY"][0]
-    client = OpenAI(api_key='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')
+    if message.text[:2] == 'sk':
+        global T
+        T = message.text
+        print(T)
+        bot.send_message(message.from_user.id, str(2))
 
-    completion = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": "You man"},
-            {"role": "user", "content": message.text}
-        ]
-    )
-    bot.send_message(message.from_user.id, str(completion.choices[0].message))
+    else:
+        # if not update_user_cache(message):
+        #     bot.send_message(message.from_user.id, "To authorize, write /authorization")
+        #     return
+        # users_cache[message.from_user.id]["KEY"][0]
+        client = OpenAI(api_key=T)
+
+        completion = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You man"},
+                {"role": "user", "content": message.text}
+            ]
+        )
+        bot.send_message(message.from_user.id, str(completion.choices[0].message))
 
 
 bot.polling()
