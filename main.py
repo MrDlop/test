@@ -12,4 +12,3 @@ completion = openai.Completion.create(engine="ada", prompt="Hello world")
 
 # print the completion
 print(completion.choices[0].text)
-Источник: https://openai.by/applications/openai-python-library
