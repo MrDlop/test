@@ -1,13 +1,15 @@
 import openai
-from openai import OpenAI
-
 openai.api_key = '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'
-client = OpenAI()
-response = client.chat.completions.create(
-    model="gpt-3.5-turbo-1106",
-    response_format={"type": "json_object"},
-    messages=[
-        {"role": "system", "content": "Say hi"},
-    ]
-)
-print(response)
+
+# list engines
+engines = openai.Engine.list()
+
+# print the first engine's id
+print(engines.data[0].id)
+
+# create a completion
+completion = openai.Completion.create(engine="ada", prompt="Hello world")
+
+# print the completion
+print(completion.choices[0].text)
+Источник: https://openai.by/applications/openai-python-library
