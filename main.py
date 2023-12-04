@@ -119,9 +119,9 @@ def text_handler(message):
     client = OpenAI(api_key='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')
 
     completion = client.chat.completions.create(
-        model=users_cache[message.from_user.id]["settings"]["model"],
+        model="gpt-3.5-turbo",
         messages=[
-            {"role": "system", "content": users_cache[message.from_user.id]["settings"]["role"]},
+            {"role": "system", "content": "You man"},
             {"role": "user", "content": message.text}
         ]
     )
