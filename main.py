@@ -132,7 +132,7 @@ def text_handler(message):
                 {"role": "user", "content": message.text}
             ]
         )
-        bot.send_message(message.from_user.id, str(completion.choices[0].message))
+        bot.send_message(message.from_user.id, str(completion.choices[0].message.content))
 
 
 bot.polling()
