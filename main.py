@@ -1,138 +1,424 @@
-import os
+# ДОБАВИТЬ КОЛИЧЕСТВО ПОЛЬЗОВАТЕЛЕЙ К АДМИНУ И ТАБЛИЦУ
+# КОМПАНИЯ - ЧЕЛОВЕК + столбец count В ТАБЛИЦУ companies
 
-# client = OpenAI(api_key="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",)
-#
-#
-# completion = client.chat.completions.create(
-#   model="gpt-3.5-turbo",
-#   messages=[
-#     {"role": "system", "content": "You are a poetic assistant, skilled in explaining complex programming concepts with creative flair."},
-#     {"role": "user", "content": "Compose a poem that explains the concept of recursion in programming."}
-#   ]
-# )
-#
-# print(completion.choices[0].message)
+import datetime
+
 import telebot
-import sqlite3
 from openai import OpenAI
 
-TOKEN = "6223135936:AAHj7gpcKVi36TG4bIZ4S971qzUlQNtJxeM"
+import config
+from config import lang, bot_answer
+from data import db_session
+
+from data.companies import Company
+from data.companies_users import CompanyUser
+from data.prompts import Prompt
+from data.users import User
+from sqlalchemy.sql.expression import func
+
+db_session.global_init("db/db.db")
+
+TOKEN = config.TOKEN
 
 bot = telebot.TeleBot(TOKEN)
+client = OpenAI(api_key=config.API_KEY)
 
-keyboard_settings = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True).add("Type network").row(
-    "Description of the defendant")
+type_network = "gpt-3.5-turbo"
 
-users_cache = dict()
-list_with_type_network = ["gpt-3.5-turbo"]
-keyboard_network = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
-for i in list_with_type_network:
-    keyboard_network.row(i)
-
-
-def update_user_cache(message):
-    global users_cache
-    if not (message.from_user.id in users_cache):
-        con = sqlite3.connect("users")
-
-        cur = con.cursor()
-
-        result = cur.execute(f"""SELECT SECRET_KEY FROM USERS
-                            WHERE TELEGRAM_ID = {message.from_user.id}""").fetchall()
-
-        if result:
-            users_cache[message.from_user.id] = {"KEY": "", "settings": {
-                "model": "gpt-3.5-turbo",
-                "role": "You are a poetic assistant, skilled in explaining complex "
-                        "programming concepts with creative flair."
-            }}
-            users_cache[message.from_user.id]["KEY"] = result[0]
-        else:
-            con.close()
-            return False
-        con.close()
-    return True
+keyboard_confirm = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True).row(bot_answer[lang]['confirm'])
 
 
 @bot.message_handler(commands=['start'])
-def start(message):
-    bot.send_message(message.from_user.id, "To authorize, write /authorization")
+def start(message: telebot.types.Message) -> None:
+    db_sess = db_session.create_session()
+    user = db_sess.query(User).filter(User.telegram_id == message.from_user.id).first()
+
+    if not (user is None):
+        bot.send_message(message.from_user.id, bot_answer[lang]["start_ok"])
+    else:
+        bot.send_message(message.from_user.id, bot_answer[lang]["not_authorization"])
 
 
+@bot.message_handler(commands=['help'])
+def help_message(message: telebot.types.Message) -> None:
+    db_sess = db_session.create_session()
+    user = db_sess.query(User).filter(User.telegram_id == message.from_user.id).first()
+
+    if not (user is None):
+        if user.company_id != 0:
+            bot.send_message(message.from_user.id, bot_answer[lang]["help"])
+        else:
+            bot.send_message(message.from_user.id, bot_answer[lang]["help_admin"])
+    else:
+        bot.send_message(message.from_user.id, bot_answer[lang]["not_authorization"])
+
+
+# Authorization
 @bot.message_handler(commands=['authorization'])
-def authorization(message):
-    bot.send_message(message.from_user.id, "send you SECRET_KEY")
-    bot.register_next_step_handler(message, add_secret_key)
+def authorization(message: telebot.types.Message) -> None:
+    bot.send_message(message.from_user.id, bot_answer[lang]["authorization_name"])
+    bot.register_next_step_handler(message, authorization_name)
 
 
-def add_secret_key(message: telebot.types.Message):
-    con = sqlite3.connect("users")
-    cur = con.cursor()
-    cur.execute(f"""INSERT INTO USERS(TELEGRAM_ID,SECRET_KEY) 
-                        VALUES({message.from_user.id},'{message.text}')""")
-    con.commit()
-    con.close()
-    update_user_cache(message)
+def authorization_name(message: telebot.types.Message) -> None:
+    bot.send_message(message.from_user.id, bot_answer[lang]["authorization_password"])
+    bot.register_next_step_handler(message, authorization_password, message.text)
 
-    bot.send_message(message.from_user.id, "Authorization was successful")
 
+def authorization_password(message: telebot.types.Message, company_name: str) -> None:
+    db_sess = db_session.create_session()
+    company = db_sess.query(Company).filter(Company.company_name == company_name).first()
+    if not (company is None) and company.check_password(message.text):
+        user = db_sess.query(User).filter(User.telegram_id == message.from_user.id).first()
+        if user is None:
+            user_count = len(db_sess.query(CompanyUser).filter(CompanyUser.company_id ==
+                                                               company.company_id).all())
+            if user_count < company.max_num_users:
+                company.max_num_users += 1
+                user_company = CompanyUser()
+                user = User()
+                user.telegram_id = user_company.telegram_id = message.from_user.id
+                user.company_id = user_company.company_id = company.company_id
+            else:
+                bot.send_message(message.from_user.id, bot_answer[lang]["authorization_fail_1"])
+                return
+            db_sess.add(user)
+            db_sess.add(user_company)
+        else:
+            user.company_id = company.company_id
+        db_sess.commit()
+        bot.send_message(message.from_user.id, bot_answer[lang]["authorization_success"])
+    else:
+        bot.send_message(message.from_user.id, bot_answer[lang]["authorization_fail"])
+
+
+@bot.message_handler(commands=['log_out'])
+def log_out(message: telebot.types.Message) -> None:
+    db_sess = db_session.create_session()
+    user = db_sess.query(User).filter(User.telegram_id == message.from_user.id).first()
+    if not (user is None):
+        db_sess.delete(user)
+        db_sess.commit()
+    bot.send_message(message.from_user.id, bot_answer[lang]["logout_success"])
+
+
+# Set mode
 
 @bot.message_handler(commands=['settings'])
-def settings(message):
-    if update_user_cache(message):
-        bot.send_message(message.from_user.id, "Choose", reply_markup=keyboard_settings)
-        bot.register_next_step_handler(message, choose_settings)
+def settings(message: telebot.types.Message) -> None:
+    db_sess = db_session.create_session()
+    user = db_sess.query(User).filter(User.telegram_id == message.from_user.id).first()
+
+    if user is None:
+        bot.send_message(message.from_user.id, bot_answer[lang]["not_authorization"])
+        return
+    prompts = db_sess.query(Prompt).all()
+    keyboard = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
+    for i in prompts:
+        keyboard.row(i.description)
+    bot.send_message(message.from_user.id, bot_answer[lang]["prompt"], reply_markup=keyboard)
+
+
+def prompt(message: telebot.types.Message) -> None:
+    db_sess = db_session.create_session()
+    user = db_sess.query(User).filter(User.telegram_id == message.from_user.id).first()
+    prompt_ = db_sess.query(Prompt).filter(Prompt.description == message.text).first()
+    if prompt_ is None:
+        bot.send_message(message.from_user.id, bot_answer[lang]["incorrect_prompt"])
     else:
-        bot.send_message(message.from_user.id, "To authorize, write /authorization")
+        user.prompt = prompt_.prompt
+        db_sess.commit()
+        bot.send_message(message.from_user.id, bot_answer[lang]["success_prompt"])
+        bot.register_next_step_handler(message, text_handler)
 
 
-def choose_settings(message):
-    if message.text == "Type network":
-        bot.send_message(message.from_user.id, "Choose", reply_markup=keyboard_network)
-        bot.register_next_step_handler(message, set_network)
-    else:
-        bot.send_message(message.from_user.id, "Send me description")
-        bot.register_next_step_handler(message, set_description)
+# Administration
+
+@bot.message_handler(commands=['delete'])
+def admin_delete_company_start(message: telebot.types.Message) -> None:
+    db_sess = db_session.create_session()
+    user = db_sess.query(User).filter(User.telegram_id == message.from_user.id).first()
+    if user is None:
+        bot.send_message(message.from_user.id, bot_answer[lang]["not_authorization"])
+        return
+    if user.company_id != 0:
+        bot.send_message(message.from_user.id, bot_answer[lang]["start_ok"])
+        return
+    bot.send_message(message.from_user.id, bot_answer[lang]["choose_company"])
+    bot.register_next_step_handler(message, admin_delete_company_confirm)
 
 
-def set_network(message):
-    global users_cache
-    if message.text in list_with_type_network:
-        users_cache[message.from_user.id]["settings"]["model"] = message.text
-        bot.send_message(message.from_user.id, "OK")
-    else:
-        bot.send_message(message.from_user.id, "I don't know this network")
+def admin_delete_company_confirm(message: telebot.types.Message) -> None:
+    db_sess = db_session.create_session()
+    company = db_sess.query(Company).filter(Company.company_name == message.text).first()
+    if company is None:
+        bot.send_message(message.from_user.id, bot_answer[lang]["unreal_company"])
+        return
+    bot.send_message(message.from_user.id, bot_answer[lang]["confirm"], reply_markup=keyboard_confirm)
+    bot.register_next_step_handler(message, admin_delete_company, (company.company_name,))
 
 
-def set_description(message):
-    global users_cache
-    users_cache[message.from_user.id]["settings"]["role"] = message.text
-    bot.send_message(message.from_user.id, "OK")
-T = ""
+def admin_delete_company(message: telebot.types.Message, data: tuple) -> None:
+    """
+    :param message:
+    :param data: name company
+    :return:
+    """
+    if message.text == bot_answer[lang]["confirm"]:
+        db_sess = db_session.create_session()
+        company = db_sess.query(Company).filter(Company.company_name == data[0]).first()
+        users = db_sess.query(User).filter(User.company_id == company.company_id).all()
+        for user in users:
+            db_sess.delete(user)
+        users = db_sess.query(CompanyUser).filter(CompanyUser.company_id == company.company_id).all()
+        for user in users:
+            db_sess.delete(user)
+        db_sess.delete(company)
+        db_sess.commit()
+    bot.send_message(message.from_user.id, bot_answer[lang]["ok"])
+
+
+@bot.message_handler(commands=['add'])
+def admin_add_company_start(message: telebot.types.Message) -> None:
+    db_sess = db_session.create_session()
+    user = db_sess.query(User).filter(User.telegram_id == message.from_user.id).first()
+    if user is None:
+        bot.send_message(message.from_user.id, bot_answer[lang]["not_authorization"])
+        return
+    if user.company_id != 0:
+        bot.send_message(message.from_user.id, bot_answer[lang]["start_ok"])
+        return
+    bot.send_message(message.from_user.id, bot_answer[lang]["input_name_company"])
+    bot.register_next_step_handler(message, admin_add_company_password)
+
+
+def admin_add_company_password(message: telebot.types.Message) -> None:
+    bot.send_message(message.from_user.id, bot_answer[lang]["input_password"])
+    bot.register_next_step_handler(message, admin_add_company_count, (message.text,))
+
+
+def admin_add_company_count(message: telebot.types.Message, data: tuple) -> None:
+    """
+    :param message:
+    :param data: name company
+    :return:
+    """
+    bot.send_message(message.from_user.id, bot_answer[lang]["input_num_of_user"])
+    bot.register_next_step_handler(message, admin_add_company_date, (*data, message.text))
+
+
+def admin_add_company_date(message: telebot.types.Message, data: tuple) -> None:
+    """
+    :param message:
+    :param data: name company, password
+    :return:
+    """
+    bot.send_message(message.from_user.id, bot_answer[lang]["input_time"])
+    bot.register_next_step_handler(message, admin_add_company_confirm, (*data, message.text))
+
+
+def admin_add_company_confirm(message: telebot.types.Message, data: tuple) -> None:
+    """
+    :param message:
+    :param data: name company, password, number of users
+    :return:
+    """
+    bot.send_message(message.from_user.id, f"""
+                     {data[0]}
+                     {data[1]}
+                     {data[2]}
+                     {message.text}""",
+                     reply_markup=keyboard_confirm)
+    bot.register_next_step_handler(message, admin_add_company, (*data, message.text))
+
+
+def admin_add_company(message: telebot.types.Message, data: tuple) -> None:
+    """
+    :param message:
+    :param data: name company, password, max numbers of users, date
+    """
+    if message.text == bot_answer[lang]["confirm"]:
+        try:
+            db_sess = db_session.create_session()
+            company = db_sess.query(Company).filter(Company.company_name == data[0]).first()
+            if company is None:
+                max_id = db_sess.query(func.max(Company.company_id)).first()
+                company = Company(
+                    company_id=max_id[0] + 1,
+                    company_name=data[0],
+                    max_num_users=data[2],
+                    time=data[3]
+                )
+                company.set_password(data[1])
+                db_sess.add(company)
+                db_sess.commit()
+            else:
+                raise ValueError
+        except ValueError:
+            bot.send_message(message.from_user.id, bot_answer[lang]["input_incorrect"])
+            return
+
+    bot.send_message(message.from_user.id, bot_answer[lang]["ok"])
+
+
+@bot.message_handler(commands=['update_limit'])
+def admin_update_limit_user_start(message: telebot.types.Message) -> None:
+    db_sess = db_session.create_session()
+    user = db_sess.query(User).filter(User.telegram_id == message.from_user.id).first()
+    if user is None:
+        bot.send_message(message.from_user.id, bot_answer[lang]["not_authorization"])
+        return
+    if user.company_id != 0:
+        bot.send_message(message.from_user.id, bot_answer[lang]["start_ok"])
+        return
+    bot.send_message(message.from_user.id, bot_answer[lang]["input_name_company"])
+    bot.register_next_step_handler(message, admin_update_limit_user_limit)
+
+
+def admin_update_limit_user_limit(message: telebot.types.Message) -> None:
+    bot.send_message(message.from_user.id, bot_answer[lang]["input_num_of_user"])
+    bot.register_next_step_handler(message, admin_update_limit_user_confirm, (message.text,))
+
+
+def admin_update_limit_user_confirm(message: telebot.types.Message, data: tuple) -> None:
+    """
+    :param message:
+    :param data: name company
+    :return:
+    """
+    bot.send_message(message.from_user.id, f"""
+                     {data[0]}
+                     {message.text}
+                     {message.text}""",
+                     reply_markup=keyboard_confirm)
+    bot.register_next_step_handler(message, admin_update_limit_user, (*data, message.text))
+
+
+def admin_update_limit_user(message: telebot.types.Message, data: tuple) -> None:
+    """
+    :param message:
+    :param data: name company, max numbers of users
+    """
+    if message.text == bot_answer[lang]["confirm"]:
+        try:
+            db_sess = db_session.create_session()
+            company = db_sess.query(Company).filter(Company.company_name == data[0]).first()
+            if company is None:
+                bot.send_message(message.from_user.id, bot_answer[lang]["input_incorrect"])
+                return
+            company[0].max_num_users = data[1]
+            db_sess.commit()
+        except ValueError:
+            bot.send_message(message.from_user.id, bot_answer[lang]["input_incorrect"])
+            return
+
+    bot.send_message(message.from_user.id, bot_answer[lang]["ok"])
+
+
+@bot.message_handler(commands=['update_date'])
+def admin_update_date_start(message: telebot.types.Message) -> None:
+    db_sess = db_session.create_session()
+    user = db_sess.query(User).filter(User.telegram_id == message.from_user.id).first()
+    if user is None:
+        bot.send_message(message.from_user.id, bot_answer[lang]["not_authorization"])
+        return
+    if user.company_id != 0:
+        bot.send_message(message.from_user.id, bot_answer[lang]["start_ok"])
+        return
+    bot.send_message(message.from_user.id, bot_answer[lang]["input_name_company"])
+    bot.register_next_step_handler(message, admin_update_date_date)
+
+
+def admin_update_date_date(message: telebot.types.Message) -> None:
+    bot.send_message(message.from_user.id, bot_answer[lang]["input_time"])
+    bot.register_next_step_handler(message, admin_update_date_confirm, (message.text,))
+
+
+def admin_update_date_confirm(message: telebot.types.Message, data: tuple) -> None:
+    """
+    :param message:
+    :param data: name company
+    :return:
+    """
+    bot.send_message(message.from_user.id, f"""
+                     {data[0]}
+                     {message.text}
+                     {message.text}""",
+                     reply_markup=keyboard_confirm)
+    bot.register_next_step_handler(message, admin_update_date, (*data, message.text))
+
+
+def admin_update_date(message: telebot.types.Message, data: tuple) -> None:
+    """
+    :param message:
+    :param data: name company, date
+    """
+    if message.text == bot_answer[lang]["confirm"]:
+        try:
+            db_sess = db_session.create_session()
+            company = db_sess.query(Company).filter(Company.company_name == data[0]).first()
+            if company is None:
+                bot.send_message(message.from_user.id, bot_answer[lang]["input_incorrect"])
+                return
+            company[0].set_time(time=data[1])
+            db_sess.commit()
+        except ValueError:
+            bot.send_message(message.from_user.id, bot_answer[lang]["input_incorrect"])
+            return
+
+    bot.send_message(message.from_user.id, bot_answer[lang]["ok"])
+
+
+@bot.message_handler(commands=['add_prompt'])
+def admin_add_prompt_start(message: telebot.types.Message) -> None:
+    bot.send_message(message.from_user.id, bot_answer[lang]["input_prompt"])
+    bot.register_next_step_handler(message, admin_add_prompt_description)
+
+
+def admin_add_prompt_description(message: telebot.types.Message) -> None:
+    bot.send_message(message.from_user.id, bot_answer[lang]["input_description"])
+    bot.register_next_step_handler(message, admin_add_prompt_confirm, message.text)
+
+
+def admin_add_prompt_confirm(message: telebot.types.Message, prompt_text: str) -> None:
+    bot.send_message(message.from_user.id, bot_answer[lang]["confirm"], reply_markup=keyboard_confirm)
+    bot.register_next_step_handler(message, admin_add_prompt, (prompt_text, message.text))
+
+
+def admin_add_prompt(message: telebot.types.Message, prompt_all: tuple) -> None:
+    if message.text == bot_answer[lang]["confirm"]:
+        try:
+            db_sess = db_session.create_session()
+            prompt_ = Prompt()
+            prompt_.prompt = prompt_all[0]
+            prompt_.description = prompt_all[1]
+            db_sess.add(prompt_)
+            db_sess.commit()
+        except ValueError:
+            bot.send_message(message.from_user.id, bot_answer[lang]["input_incorrect"])
+            return
+
+    bot.send_message(message.from_user.id, bot_answer[lang]["ok"])
+
 
 @bot.message_handler(content_types=["text"])
-def text_handler(message):
-    if message.text[:2] == 'sk':
-        global T
-        T = message.text
-        print(T)
-        bot.send_message(message.from_user.id, str(2))
+def text_handler(message: telebot.types.Message) -> None:
+    db_sess = db_session.create_session()
+    user = db_sess.query(User).filter(User.telegram_id == message.from_user.id).first()
 
-    else:
-        # if not update_user_cache(message):
-        #     bot.send_message(message.from_user.id, "To authorize, write /authorization")
-        #     return
-        # users_cache[message.from_user.id]["KEY"][0]
-        client = OpenAI(api_key=T)
-
-        completion = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You man"},
-                {"role": "user", "content": message.text}
-            ]
-        )
-        bot.send_message(message.from_user.id, str(completion.choices[0].message.content))
+    if user is None:
+        bot.send_message(message.from_user.id, bot_answer[lang]["not_authorization"])
+        return
+    if user.company.time <= datetime.datetime.now():
+        bot.send_message(message.from_user.id, bot_answer[lang]["end_time"])
+        return
+    completion = client.chat.completions.create(
+        model=type_network,
+        messages=[
+            {"role": "user", "content": user.promt + message.text}
+        ]
+    )
+    bot.send_message(message.from_user.id, str(completion.choices[0].message.content))
 
 
 bot.polling()
