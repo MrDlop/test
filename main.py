@@ -1,13 +1,10 @@
-# ДОБАВИТЬ КОЛИЧЕСТВО ПОЛЬЗОВАТЕЛЕЙ К АДМИНУ И ТАБЛИЦУ
-# КОМПАНИЯ - ЧЕЛОВЕК + столбец count В ТАБЛИЦУ companies
-
 import datetime
 
 import telebot
 from openai import OpenAI
 
 import config
-from config import lang, bot_answer
+from script import lang, bot_answer
 from data import db_session
 
 from data.companies import Company
