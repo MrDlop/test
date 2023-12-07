@@ -1,14 +1,23 @@
 lang = "ru"
 bot_answer = {
     "ru": {
-        "start_ok": "Для получения информации введите /help",
-        "not_authorization": "Для входа введите /authorization",
+        "start_ok": "Вы готовы к работе! Введите запрос для нейросети",
+        "help_but": "Помощь",
+        "login": "Войти в аккаунт",
+        "logout": "Выйти из аккаунта",
+        "add": "Добавить компанию",
+        "del": "Удалить компанию",
+        "upd_time": "Изменить срок окончания подписки",
+        "upd_lim": "Изменить количество пользователей компании",
+        "add_prompt": "Добавить подсказку",
+        "not_authorization": "Для начала работы требуется войти в аккаунт",
         "authorization_name": "Введите название компании",
         "authorization_password": "Введите пароль",
         "authorization_success": "Удачная авторизация",
         "authorization_fail": "Неверный пароль или название компании",
         "authorization_fail_1": "Ограничение на количество людей",
         "logout_success": "Успешный выход",
+        "settings": "Настройки",
         "prompt": "Выберите настройку",
         "incorrect_prompt": "Этой настройки не существует",
         "success_prompt": "Настройка успешно установлена",
@@ -41,46 +50,5 @@ bot_answer = {
 /add_prompt - добавление шаблона для нейросети
 любое другое сообщение - получение ответа от нейросети
 """
-    },
-    "en": {
-        "start_ok": "For information, type /help",
-        "not_authorization": "To log in, enter /authorization",
-        "authorization_name": "Enter the company name",
-        "authorization_password": "Enter password",
-        "authorization_success": "Authorization was successful",
-        "logout_success": "Log out was successful",
-        "authorization_fail": "Incorrect password or company name",
-        "authorization_fail_1": "Limit on the number of people",
-        "prompt": "Choose settings",
-        "incorrect_prompt": "This setting does not exist",
-        "success_prompt": "The setting has been successfully installed",
-        "choose_company": "Choose company",
-        "unreal_company": "This company does not exist",
-        "confirm": "Confirm",
-        "ok": "OK",
-        "input_name_company": "Enter the company name",
-        "input_password": "Enter password",
-        "input_time": "Enter subscription end date dd.mm.yy",
-        "input_num_of_user": "Enter the maximum number of users",
-        "input_incorrect": "Incorrect data entry",
-        "end_time": "Subscription time has expired",
-        "input_prompt": "Enter text of prompt",
-        "input_description": "Enter a description",
-        "help": """/authorization - user authorization
-/help - getting help
-/settings - setting the mode
-/log_out - log out of the account
-any other message - receiving a response from the neural network
-        """,
-        "help_admin": """/authorization - user authorization
-/help - getting help
-/settings - setting the mode
-/log_out - log out of the account
-/delete - deleting a company
-/add - adding a company
-/update_limit - change the maximum number of users from the company
-/update_date - change the subscription expiration date
-/add_prompt - adding a template for a neural network
-any other message - receiving a response from the neural network
-"""
-    }}
+    }
+}

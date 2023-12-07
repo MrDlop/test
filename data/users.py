@@ -12,4 +12,4 @@ class User(SqlAlchemyBase):
     company_id = sqlalchemy.Column(sqlalchemy.Integer,
                                    sqlalchemy.ForeignKey("companies.company_id"))
     company = orm.relationship('Company')
-    prompt = sqlalchemy.Column(sqlalchemy.String, default="")
+    prompt = sqlalchemy.Column(sqlalchemy.String, default=" ")
