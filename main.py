@@ -5,6 +5,7 @@ from openai import OpenAI
 from telebot import types
 
 import config
+from data.messages import Message
 from script import lang, bot_answer
 from data import db_session
 
@@ -122,6 +123,7 @@ def authorization_name(message: telebot.types.Message) -> None:
 
 
 def authorization_password(message: telebot.types.Message, company_name: str) -> None:
+    msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
     db_sess = db_session.create_session()
     company = db_sess.query(Company).filter(Company.company_name == company_name).first()
     if not (company is None) and company.check_password(message.text):
@@ -139,6 +141,7 @@ def authorization_password(message: telebot.types.Message, company_name: str) ->
                 user.telegram_id = user_company.telegram_id = message.from_user.id
                 user.company_id = user_company.company_id = company.company_id
             else:
+                bot.delete_message(message.from_user.id, msg_temp)
                 bot.send_message(message.from_user.id, bot_answer[lang]["authorization_fail_1"])
                 main_menu(message)
                 return
@@ -147,13 +150,16 @@ def authorization_password(message: telebot.types.Message, company_name: str) ->
         else:
             user.company_id = company.company_id
         db_sess.commit()
+        bot.delete_message(message.from_user.id, msg_temp)
         main_menu(message)
     else:
+        msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
         bot.send_message(message.from_user.id, bot_answer[lang]["authorization_fail"])
         main_menu(message)
 
 
 def prompt(message: telebot.types.Message) -> None:
+    msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
     db_sess = db_session.create_session()
     user = db_sess.query(User).filter(User.telegram_id == message.from_user.id).first()
     prompt_ = db_sess.query(Prompt).filter(Prompt.description == message.text).first()
@@ -161,15 +167,19 @@ def prompt(message: telebot.types.Message) -> None:
         bot.send_message(message.from_user.id, bot_answer[lang]["incorrect_prompt"])
     else:
         user.prompt = prompt_.prompt
+    bot.delete_message(message.from_user.id, msg_temp)
     main_menu(message)
 
 
 def admin_delete_company_confirm(message: telebot.types.Message) -> None:
+    msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
     db_sess = db_session.create_session()
     company = db_sess.query(Company).filter(Company.company_name == message.text).first()
     if company is None:
+        bot.delete_message(message.from_user.id, msg_temp)
         bot.send_message(message.from_user.id, bot_answer[lang]["unreal_company"])
         return
+    bot.delete_message(message.from_user.id, msg_temp)
     bot.send_message(message.from_user.id, bot_answer[lang]["confirm"], reply_markup=keyboard_confirm)
     bot.register_next_step_handler(message, admin_delete_company, (company.company_name,))
 
@@ -180,6 +190,7 @@ def admin_delete_company(message: telebot.types.Message, data: tuple) -> None:
     :param data: name company
     :return:
     """
+    msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
     if message.text == bot_answer[lang]["confirm"]:
         db_sess = db_session.create_session()
         company = db_sess.query(Company).filter(Company.company_name == data[0]).first()
@@ -191,6 +202,8 @@ def admin_delete_company(message: telebot.types.Message, data: tuple) -> None:
             db_sess.delete(user)
         db_sess.delete(company)
         db_sess.commit()
+
+    bot.delete_message(message.from_user.id, msg_temp)
     bot.send_message(message.from_user.id, bot_answer[lang]["ok"])
     main_menu(message)
 
@@ -240,6 +253,7 @@ def admin_add_company(message: telebot.types.Message, data: tuple) -> None:
     :param message:
     :param data: name company, password, max numbers of users, date
     """
+    msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
     if message.text == bot_answer[lang]["confirm"]:
         try:
             db_sess = db_session.create_session()
@@ -258,10 +272,12 @@ def admin_add_company(message: telebot.types.Message, data: tuple) -> None:
             else:
                 raise ValueError
         except ValueError:
+            bot.delete_message(message.from_user.id, msg_temp)
             bot.send_message(message.from_user.id, bot_answer[lang]["input_incorrect"])
             main_menu(message)
             return
 
+    bot.delete_message(message.from_user.id, msg_temp)
     bot.send_message(message.from_user.id, bot_answer[lang]["ok"])
     main_menu(message)
 
@@ -290,6 +306,7 @@ def admin_update_limit_user(message: telebot.types.Message, data: tuple) -> None
     :param message:
     :param data: name company, max numbers of users
     """
+    msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
     if message.text == bot_answer[lang]["confirm"]:
         try:
             db_sess = db_session.create_session()
@@ -301,10 +318,12 @@ def admin_update_limit_user(message: telebot.types.Message, data: tuple) -> None
             company[0].max_num_users = data[1]
             db_sess.commit()
         except ValueError:
+            bot.delete_message(message.from_user.id, msg_temp)
             bot.send_message(message.from_user.id, bot_answer[lang]["input_incorrect"])
             main_menu(message)
             return
 
+    bot.delete_message(message.from_user.id, msg_temp)
     bot.send_message(message.from_user.id, bot_answer[lang]["ok"])
     main_menu(message)
 
@@ -333,6 +352,8 @@ def admin_update_date(message: telebot.types.Message, data: tuple) -> None:
     :param message:
     :param data: name company, date
     """
+    msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
+
     if message.text == bot_answer[lang]["confirm"]:
         try:
             db_sess = db_session.create_session()
@@ -344,10 +365,12 @@ def admin_update_date(message: telebot.types.Message, data: tuple) -> None:
             company[0].set_time(time=data[1])
             db_sess.commit()
         except ValueError:
+            bot.delete_message(message.from_user.id, msg_temp)
             bot.send_message(message.from_user.id, bot_answer[lang]["input_incorrect"])
             main_menu(message)
             return
 
+    bot.delete_message(message.from_user.id, msg_temp)
     bot.send_message(message.from_user.id, bot_answer[lang]["ok"])
     main_menu(message)
 
@@ -363,6 +386,8 @@ def admin_add_prompt_confirm(message: telebot.types.Message, prompt_text: str) -
 
 
 def admin_add_prompt(message: telebot.types.Message, prompt_all: tuple) -> None:
+    msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
+
     if message.text == bot_answer[lang]["confirm"]:
         try:
             db_sess = db_session.create_session()
@@ -372,32 +397,61 @@ def admin_add_prompt(message: telebot.types.Message, prompt_all: tuple) -> None:
             db_sess.add(prompt_)
             db_sess.commit()
         except ValueError:
+            bot.delete_message(message.from_user.id, msg_temp)
             bot.send_message(message.from_user.id, bot_answer[lang]["input_incorrect"])
             main_menu(message)
             return
 
+    bot.delete_message(message.from_user.id, msg_temp)
     bot.send_message(message.from_user.id, bot_answer[lang]["ok"])
     main_menu(message)
 
 
 @bot.message_handler(content_types=["text"])
 def text_handler(message: telebot.types.Message) -> None:
+    msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
     db_sess = db_session.create_session()
     user = db_sess.query(User).filter(User.telegram_id == message.from_user.id).first()
 
     if user is None:
+        bot.delete_message(message.from_user.id, msg_temp)
         main_menu(message)
         return
     if user.company.time <= datetime.datetime.now():
+        bot.delete_message(message.from_user.id, msg_temp)
         bot.send_message(message.from_user.id, bot_answer[lang]["end_time"])
         main_menu(message)
         return
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant." + user.prompt}
+    ]
+    mess = db_sess.query(Message).filter(Message.company_id == user.company_id
+                                         and Message.telegram_id == user.telegram_id).all()
+    if not(mess is None):
+        for msg in mess:
+            messages.append(
+                {"role": "user",
+                 "content": msg.request}
+            )
+            messages.append(
+                {"role": "assistant",
+                 "content": msg.responce}
+            )
+    messages.append(
+        {"role": "user", "content": message.text})
     completion = client.chat.completions.create(
         model=type_network,
-        messages=[
-            {"role": "user", "content": user.promt + " " + message.text}
-        ]
+        messages=messages
     )
+    new_mess = Message()
+    new_mess.telegram_id = user.telegram_id
+    new_mess.company_id = user.company_id
+    new_mess.request = message.text
+    new_mess.response = str(completion.choices[0].message.content)
+    db_sess.add(new_mess)
+    db_sess.commit()
+
+    bot.delete_message(message.from_user.id, msg_temp)
     bot.send_message(message.from_user.id, str(completion.choices[0].message.content))
 
 

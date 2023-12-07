@@ -1,1 +1,1 @@
-from . import users, companies, prompts, companies_users
+from . import users, companies, prompts, companies_users, messages
