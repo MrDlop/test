@@ -444,6 +444,11 @@ def text_handler(message: telebot.types.Message) -> None:
         messages=messages
     )
     new_mess = Message()
+
+    max_id = db_sess.query(func.max(Message.ID)).first()[0]
+    if max_id is None:
+        max_id = -1
+    new_mess.ID = max_id + 1
     new_mess.telegram_id = user.telegram_id
     new_mess.company_id = user.company_id
     new_mess.request = message.text
