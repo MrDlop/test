@@ -412,7 +412,7 @@ def text_handler(message: telebot.types.Message) -> None:
     completion = client.chat.completions.create(
         model=type_network,
         messages=[
-            {"role": "user", "content": user.promt + message.text}
+            {"role": "user", "content": user.prompt + message.text}
         ]
     )
     bot.send_message(message.from_user.id, str(completion.choices[0].message.content))
