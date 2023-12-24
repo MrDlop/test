@@ -52,6 +52,8 @@ def main_menu(message):
             markup.row(upd_time)
             upd_lim = types.InlineKeyboardButton(bot_answer[lang]['upd_lim'], callback_data="upd_lim")
             markup.row(upd_lim)
+            upd_info = types.InlineKeyboardButton("Изменить информацию", callback_data="upd_lim")
+            markup.row(upd_info)
             add_prompt = types.InlineKeyboardButton(bot_answer[lang]['add_prompt'], callback_data="add_prompt")
             markup.row(add_prompt)
         elif user.company.telegram_id_chief == user.telegram_id:
@@ -191,6 +193,7 @@ def prompt(message: telebot.types.Message) -> None:
         bot.send_message(message.from_user.id, bot_answer[lang]["incorrect_prompt"])
     else:
         user.prompt = prompt_.prompt
+    db_sess.commit()
     bot.delete_message(message.from_user.id, msg_temp)
     main_menu(message)
 
@@ -530,7 +533,11 @@ def text_handler(message: telebot.types.Message) -> None:
     elif user.prompt == "table-table":
         bot.delete_message(message.from_user.id, msg_temp)
         bot.send_message(message.from_user.id, "Отправьте таблицу")
-        bot.register_next_step_handler(message, table)
+        bot.register_next_step_handler(message, table_send)
+    elif user.prompt == "word-table":
+        bot.delete_message(message.from_user.id, msg_temp)
+        bot.send_message(message.from_user.id, "Отправьте таблицу")
+        bot.register_next_step_handler(message, word_send)
     elif user.prompt == "close-post":
         bot.delete_message(message.from_user.id, msg_temp)
         bot.send_message(message.from_user.id, 'Введите тему поста')
@@ -554,25 +561,112 @@ def close_post_req(message):
     bot.send_message(message.from_user.id, str(completion.choices[0].message.content))
 
 
-def table(message):
-    bot.send_message(message.from_user.id, "Приведите образец")
-    bot.register_next_step_handler(message, table_send, message.text)
-
-
-def table_send(message, table_):
+def table_send(message):
     msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
+    if message.document.file_size > 100 * 1000 * 1000:
+        bot.delete_message(message.from_user.id, msg_temp)
+        bot.send_message(message.from_user.id, "Файл должен быть меньше 100 Мб")
+        main_menu(message)
+        return
+    file_info = bot.get_file(message.document.file_id)
+    if file_info.file_path[file_info.file_path.rfind('.'):] != '.xlsx':
+        bot.delete_message(message.from_user.id, msg_temp)
+        bot.send_message(message.from_user.id, "Файл должен быть формата .xlsx")
+        main_menu(message)
+        return
+    src = os.path.join('user_data/', str(message.from_user.id))
+    ext = ".docx"
+    in_name = src + ext
+    downloaded_file = bot.download_file(file_info.file_path)
+
+    with open(in_name, 'wb') as new_file:
+        new_file.write(downloaded_file)
+    df = pd.read_excel(in_name)
+
+    data_tables_str = df.to_csv(index=False, sep=';')
 
     messages = [{"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": f"""{table_}
-                    Это список продаж компании за неделю. Сделай из него сводку по каждому артикулу и занеси в таблицу по образцу.
-                    {message.text}"""}]
+                {"role": "user", "content": f"""### Задание ###
+    Представлена таблица - в одной строке вся информация об отдельно взятой продаже. 
+    Создай таблицу с 4 столбцами. в первом - артикул. во втором, денежный объем его продаж.
+    в третьем, суммарный объем его продаж в штуках. в четвертом, 
+    его остаток на самый последний момент. 
+    Ответа приведи в виде таблицы в csv формате разделитель ; 
+    названия столбцов пиши кроме таблицы ничего не пиши
+    ### Таблица ###
+    {data_tables_str}"""}]
     completion = client.chat.completions.create(
         model=type_network,
         messages=messages
     )
-
+    os.remove(in_name)
     bot.delete_message(message.from_user.id, msg_temp)
-    bot.send_message(message.from_user.id, str(completion.choices[0].message.content))
+    df = pd.read_csv(StringIO(str(completion.choices[0].message.content)), sep=';')
+
+    df.to_excel(f'user_data/{message.from_user.id}_output.xlsx', index=False)
+
+    with open(f'user_data/{message.from_user.id}_output.xlsx', 'rb') as f1:
+        bot.send_document(message.chat.id, f1)
+
+
+def word_send(message):
+    msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
+    if message.document.file_size > 100 * 1000 * 1000:
+        bot.delete_message(message.from_user.id, msg_temp)
+        bot.send_message(message.from_user.id, "Файл должен быть меньше 100 Мб")
+        main_menu(message)
+        return
+    file_info = bot.get_file(message.document.file_id)
+    if file_info.file_path[file_info.file_path.rfind('.'):] != '.docx':
+        bot.delete_message(message.from_user.id, msg_temp)
+        bot.send_message(message.from_user.id, "Файл должен быть формата .docx")
+        main_menu(message)
+        return
+    src = os.path.join('user_data/', str(message.from_user.id))
+    ext = ".docx"
+    in_name = src + ext
+    downloaded_file = bot.download_file(file_info.file_path)
+
+    with open(in_name, 'wb') as new_file:
+        new_file.write(downloaded_file)
+    doc = Document(in_name)
+    all_tables = doc.tables
+    data_tables = {i: None for i in range(len(all_tables))}
+    for i, table in enumerate(all_tables):
+        data_tables[i] = [[] for _ in range(len(table.rows))]
+        for j, row in enumerate(table.rows):
+            for cell in row.cells:
+                data_tables[i][j].append(cell.text)
+
+    print(data_tables)
+    data_tables_str = ""
+    for i in data_tables:
+        for j in data_tables[i]:
+            data_tables_str += ';'.join(j)
+        data_tables_str += '\n'
+
+    messages = [{"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": f"""### Задание ###
+    Представлена таблица - в одной строке вся информация об отдельно взятой продаже. 
+    Создай таблицу с 4 столбцами. в первом - артикул. во втором, денежный объем его продаж.
+    в третьем, суммарный объем его продаж в штуках. в четвертом, 
+    его остаток на самый последний момент. 
+    Ответа приведи в виде таблицы в csv формате разделитель ; 
+    названия столбцов пиши кроме таблицы ничего не пиши
+    ### Таблица ###
+    {data_tables_str}"""}]
+    completion = client.chat.completions.create(
+        model=type_network,
+        messages=messages
+    )
+    os.remove(in_name)
+    bot.delete_message(message.from_user.id, msg_temp)
+    df = pd.read_csv(StringIO(str(completion.choices[0].message.content)), sep=';')
+
+    df.to_excel(f'user_data/{message.from_user.id}_output.xlsx', index=False)
+
+    with open(f'user_data/{message.from_user.id}_output.xlsx', 'rb') as f1:
+        bot.send_document(message.chat.id, f1)
 
 
 @bot.message_handler(content_types=["document"])
