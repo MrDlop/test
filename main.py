@@ -1,11 +1,14 @@
 import datetime
+import os
 
 import telebot
 from openai import OpenAI
 from telebot import types
+from docx import Document
+import pandas as pd
+from io import StringIO
 
 import config
-from data.messages import Message
 from script import lang, bot_answer
 from data import db_session
 
@@ -38,6 +41,8 @@ def main_menu(message):
         markup.row(out)
         setting = types.InlineKeyboardButton(bot_answer[lang]['settings'], callback_data="settings")
         markup.row(setting)
+        help_ = types.InlineKeyboardButton(bot_answer[lang]['help_but'], callback_data="help")
+        markup.row(help_)
         if user.company_id == 0:
             add = types.InlineKeyboardButton(bot_answer[lang]['add'], callback_data="add")
             markup.row(add)
@@ -49,12 +54,23 @@ def main_menu(message):
             markup.row(upd_lim)
             add_prompt = types.InlineKeyboardButton(bot_answer[lang]['add_prompt'], callback_data="add_prompt")
             markup.row(add_prompt)
+        elif user.company.telegram_id_chief == user.telegram_id:
+            add = types.InlineKeyboardButton(bot_answer[lang]['add'], callback_data="add")
+            markup.row(add)
+            delete = types.InlineKeyboardButton(bot_answer[lang]['del'], callback_data="del")
+            markup.row(delete)
+
         bot.send_message(message.from_user.id, bot_answer[lang]["start_ok"], reply_markup=markup)
     else:
         markup = types.InlineKeyboardMarkup()
         auth = types.InlineKeyboardButton(bot_answer[lang]['login'], callback_data="login")
         markup.row(auth)
         bot.send_message(message.from_user.id, bot_answer[lang]["not_authorization"], reply_markup=markup)
+
+
+@bot.message_handler(commands=['system'])
+def sys_(message):
+    bot.send_message(message.from_user.id, str(os.system("df -h")))
 
 
 @bot.message_handler(commands=['start'])
@@ -66,6 +82,12 @@ def start(message: telebot.types.Message) -> None:
 def callback_message(callback):
     if callback.data == "login":
         bot.send_message(callback.from_user.id, bot_answer[lang]["authorization_name"])
+        bot.register_next_step_handler(callback.message, authorization_name)
+    elif callback.data == "help":
+        markup = types.InlineKeyboardMarkup()
+        auth = types.InlineKeyboardButton(bot_answer[lang]['help_admin'], url=config.ADMIN)
+        markup.row(auth)
+        bot.send_message(callback.from_user.id, bot_answer[lang]["help"], reply_markup=markup)
         bot.register_next_step_handler(callback.message, authorization_name)
     elif callback.data == "logout":
         db_sess = db_session.create_session()
@@ -115,6 +137,9 @@ def callback_message(callback):
         elif callback.data == "add_prompt":
             bot.send_message(callback.from_user.id, bot_answer[lang]["input_prompt"])
             bot.register_next_step_handler(callback.message, admin_add_prompt_description)
+        elif callback.data == "upd_info":
+            bot.send_message(callback.from_user.id, bot_answer[lang]["input_name_company"])
+            bot.register_next_step_handler(callback.message, admin_update_info)
 
 
 def authorization_name(message: telebot.types.Message) -> None:
@@ -153,7 +178,6 @@ def authorization_password(message: telebot.types.Message, company_name: str) ->
         bot.delete_message(message.from_user.id, msg_temp)
         main_menu(message)
     else:
-        msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
         bot.send_message(message.from_user.id, bot_answer[lang]["authorization_fail"])
         main_menu(message)
 
@@ -229,6 +253,16 @@ def admin_add_company_date(message: telebot.types.Message, data: tuple) -> None:
     :param data: name company, password
     :return:
     """
+    bot.send_message(message.from_user.id, bot_answer[lang]["input_chief"])
+    bot.register_next_step_handler(message, admin_add_company_chief, (*data, message.text))
+
+
+def admin_add_company_chief(message: telebot.types.Message, data: tuple) -> None:
+    """
+    :param message:
+    :param data: name company, password, number of users
+    :return:
+    """
     bot.send_message(message.from_user.id, bot_answer[lang]["input_time"])
     bot.register_next_step_handler(message, admin_add_company_confirm, (*data, message.text))
 
@@ -236,13 +270,14 @@ def admin_add_company_date(message: telebot.types.Message, data: tuple) -> None:
 def admin_add_company_confirm(message: telebot.types.Message, data: tuple) -> None:
     """
     :param message:
-    :param data: name company, password, number of users
+    :param data: name company, password, number of users, date
     :return:
     """
     bot.send_message(message.from_user.id, f"""
                      {data[0]}
                      {data[1]}
                      {data[2]}
+                     {data[3]}
                      {message.text}""",
                      reply_markup=keyboard_confirm)
     bot.register_next_step_handler(message, admin_add_company, (*data, message.text))
@@ -251,7 +286,7 @@ def admin_add_company_confirm(message: telebot.types.Message, data: tuple) -> No
 def admin_add_company(message: telebot.types.Message, data: tuple) -> None:
     """
     :param message:
-    :param data: name company, password, max numbers of users, date
+    :param data: name company, password, max numbers of users, date, chief
     """
     msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
     if message.text == bot_answer[lang]["confirm"]:
@@ -264,13 +299,73 @@ def admin_add_company(message: telebot.types.Message, data: tuple) -> None:
                     company_id=max_id[0] + 1,
                     company_name=data[0],
                     max_num_users=data[2],
-                    time=data[3]
+                    time=data[3],
+                    telegram_id_chief=data[4]
                 )
                 company.set_password(data[1])
                 db_sess.add(company)
                 db_sess.commit()
             else:
                 raise ValueError
+        except ValueError:
+            bot.delete_message(message.from_user.id, msg_temp)
+            bot.send_message(message.from_user.id, bot_answer[lang]["input_incorrect"])
+            main_menu(message)
+            return
+
+    bot.delete_message(message.from_user.id, msg_temp)
+    bot.send_message(message.from_user.id, bot_answer[lang]["ok"])
+    main_menu(message)
+
+
+def admin_update_info(message: telebot.types.Message) -> None:
+    bot.send_message(message.from_user.id, "Введите info")
+    bot.register_next_step_handler(message, admin_update_info_1, (message.text,))
+
+
+def admin_update_info_1(message: telebot.types.Message, data: tuple) -> None:
+    bot.send_message(message.from_user.id, "Введите info_year")
+    bot.register_next_step_handler(message, admin_update_info_2, (*data, message.text))
+
+
+def admin_update_info_2(message: telebot.types.Message, data: tuple) -> None:
+    bot.send_message(message.from_user.id, "Введите info_tendency")
+    bot.register_next_step_handler(message, admin_update_info_confirm, (*data, message.text))
+
+
+def admin_update_info_confirm(message: telebot.types.Message, data: tuple) -> None:
+    """
+    :param message: info_tendency
+    :param data: name_company, info, info_year
+    :return:
+    """
+    bot.send_message(message.from_user.id, f"""
+                     {data[0]}
+                     {data[1]}
+                     {data[2]}
+                     {message.text}""",
+                     reply_markup=keyboard_confirm)
+    bot.register_next_step_handler(message, admin_update_info_info, (*data, message.text))
+
+
+def admin_update_info_info(message: telebot.types.Message, data: tuple) -> None:
+    """
+    :param message:
+    :param data: name_company, info, info_year, info_tendency
+    """
+    msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
+    if message.text == bot_answer[lang]["confirm"]:
+        try:
+            db_sess = db_session.create_session()
+            company = db_sess.query(Company).filter(Company.company_name == data[0]).first()
+            if company is None:
+                bot.send_message(message.from_user.id, bot_answer[lang]["input_incorrect"])
+                main_menu(message)
+                return
+            company[0].info = data[1]
+            company[0].info_year = data[2]
+            company[0].info_tendency = data[3]
+            db_sess.commit()
         except ValueError:
             bot.delete_message(message.from_user.id, msg_temp)
             bot.send_message(message.from_user.id, bot_answer[lang]["input_incorrect"])
@@ -422,42 +517,186 @@ def text_handler(message: telebot.types.Message) -> None:
         bot.send_message(message.from_user.id, bot_answer[lang]["end_time"])
         main_menu(message)
         return
-    messages = [
-        {"role": "system", "content": "You are a helpful assistant." + user.prompt}
-    ]
-    mess = db_sess.query(Message).filter(Message.company_id == user.company_id
-                                         and Message.telegram_id == user.telegram_id).all()
-    if not(mess is None):
-        for msg in mess:
-            messages.append(
-                {"role": "user",
-                 "content": msg.request}
-            )
-            messages.append(
-                {"role": "assistant",
-                 "content": msg.responce}
-            )
-    messages.append(
-        {"role": "user", "content": message.text})
+    if user.prompt == "free_chat":
+        messages = [{"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": message.text}]
+        completion = client.chat.completions.create(
+            model=type_network,
+            messages=messages
+        )
+
+        bot.delete_message(message.from_user.id, msg_temp)
+        bot.send_message(message.from_user.id, str(completion.choices[0].message.content))
+    elif user.prompt == "table-table":
+        bot.delete_message(message.from_user.id, msg_temp)
+        bot.send_message(message.from_user.id, "Отправьте таблицу")
+        bot.register_next_step_handler(message, table)
+    elif user.prompt == "close-post":
+        bot.delete_message(message.from_user.id, msg_temp)
+        bot.send_message(message.from_user.id, 'Введите тему поста')
+        bot.register_next_step_handler(message, close_post_req)
+
+
+def close_post_req(message):
+    msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
+    db_sess = db_session.create_session()
+    user = db_sess.query(User).filter(User.telegram_id == message.from_user.id).first()
+    messages = [{"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": f"""Напиши пост для социальной сети компании на тему: {message.text}.
+                 Компания занимается {user.company.info}, стремится в маркетинге к  {user.company.info_tendency}, 
+                 целевая аудитория - {user.company.info_year} лет, итд. Будь краток, честен."""}]
     completion = client.chat.completions.create(
         model=type_network,
         messages=messages
     )
-    new_mess = Message()
-
-    max_id = db_sess.query(func.max(Message.ID)).first()[0]
-    if max_id is None:
-        max_id = -1
-    new_mess.ID = max_id + 1
-    new_mess.telegram_id = user.telegram_id
-    new_mess.company_id = user.company_id
-    new_mess.request = message.text
-    new_mess.response = str(completion.choices[0].message.content)
-    db_sess.add(new_mess)
-    db_sess.commit()
 
     bot.delete_message(message.from_user.id, msg_temp)
     bot.send_message(message.from_user.id, str(completion.choices[0].message.content))
+
+
+def table(message):
+    bot.send_message(message.from_user.id, "Приведите образец")
+    bot.register_next_step_handler(message, table_send, message.text)
+
+
+def table_send(message, table_):
+    msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
+
+    messages = [{"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": f"""{table_}
+                    Это список продаж компании за неделю. Сделай из него сводку по каждому артикулу и занеси в таблицу по образцу.
+                    {message.text}"""}]
+    completion = client.chat.completions.create(
+        model=type_network,
+        messages=messages
+    )
+
+    bot.delete_message(message.from_user.id, msg_temp)
+    bot.send_message(message.from_user.id, str(completion.choices[0].message.content))
+
+
+@bot.message_handler(content_types=["document"])
+def handle_document(message):
+    msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
+    db_sess = db_session.create_session()
+    user = db_sess.query(User).filter(User.telegram_id == message.from_user.id).first()
+
+    if user is None:
+        bot.delete_message(message.from_user.id, msg_temp)
+        main_menu(message)
+        return
+    if user.company.time <= datetime.datetime.now():
+        bot.delete_message(message.from_user.id, msg_temp)
+        bot.send_message(message.from_user.id, bot_answer[lang]["end_time"])
+        main_menu(message)
+        return
+    if user.prompt == 'word-table':
+        if message.document.file_size > 100 * 1000 * 1000:
+            bot.delete_message(message.from_user.id, msg_temp)
+            bot.send_message(message.from_user.id, "Файл должен быть меньше 100 Мб")
+            main_menu(message)
+            return
+        file_info = bot.get_file(message.document.file_id)
+        if file_info.file_path[file_info.file_path.rfind('.'):] != '.docx':
+            bot.delete_message(message.from_user.id, msg_temp)
+            bot.send_message(message.from_user.id, "Файл должен быть формата .docx")
+            main_menu(message)
+            return
+        src = os.path.join('user_data/', str(message.from_user.id))
+        ext = ".docx"
+        in_name = src + ext
+        downloaded_file = bot.download_file(file_info.file_path)
+
+        with open(in_name, 'wb') as new_file:
+            new_file.write(downloaded_file)
+        doc = Document(in_name)
+        all_tables = doc.tables
+        data_tables = {i: None for i in range(len(all_tables))}
+        for i, table in enumerate(all_tables):
+            data_tables[i] = [[] for _ in range(len(table.rows))]
+            for j, row in enumerate(table.rows):
+                for cell in row.cells:
+                    data_tables[i][j].append(cell.text)
+
+        print(data_tables)
+        data_tables_str = ""
+        for i in data_tables:
+            for j in data_tables[i]:
+                data_tables_str += ';'.join(j)
+            data_tables_str += '\n'
+
+        messages = [{"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": f"""### Задание ###
+Представлена таблица - в одной строке вся информация об отдельно взятой продаже. 
+Создай таблицу с 4 столбцами. в первом - артикул. во втором, денежный объем его продаж.
+в третьем, суммарный объем его продаж в штуках. в четвертом, 
+его остаток на самый последний момент. 
+Ответа приведи в виде таблицы в csv формате разделитель ; 
+названия столбцов пиши кроме таблицы ничего не пиши
+### Таблица ###
+{data_tables_str}"""}]
+        completion = client.chat.completions.create(
+            model=type_network,
+            messages=messages
+        )
+        os.remove(in_name)
+        bot.delete_message(message.from_user.id, msg_temp)
+        df = pd.read_csv(StringIO(str(completion.choices[0].message.content)), sep=';')
+
+        df.to_excel(f'user_data/{message.from_user.id}_output.xlsx', index=False)
+
+        with open(f'user_data/{message.from_user.id}_output.xlsx', 'rb') as f1:
+            bot.send_document(message.chat.id, f1)
+    elif user.prompt == 'table-table':
+        if message.document.file_size > 100 * 1000 * 1000:
+            bot.delete_message(message.from_user.id, msg_temp)
+            bot.send_message(message.from_user.id, "Файл должен быть меньше 100 Мб")
+            main_menu(message)
+            return
+        file_info = bot.get_file(message.document.file_id)
+        if file_info.file_path[file_info.file_path.rfind('.'):] != '.xlsx':
+            bot.delete_message(message.from_user.id, msg_temp)
+            bot.send_message(message.from_user.id, "Файл должен быть формата .xlsx")
+            main_menu(message)
+            return
+        src = os.path.join('user_data/', str(message.from_user.id))
+        ext = ".docx"
+        in_name = src + ext
+        downloaded_file = bot.download_file(file_info.file_path)
+
+        with open(in_name, 'wb') as new_file:
+            new_file.write(downloaded_file)
+        df = pd.read_excel(in_name)
+
+        data_tables_str = df.to_csv(index=False, sep=';')
+
+        messages = [{"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": f"""### Задание ###
+Представлена таблица - в одной строке вся информация об отдельно взятой продаже. 
+Создай таблицу с 4 столбцами. в первом - артикул. во втором, денежный объем его продаж.
+в третьем, суммарный объем его продаж в штуках. в четвертом, 
+его остаток на самый последний момент. 
+Ответа приведи в виде таблицы в csv формате разделитель ; 
+названия столбцов пиши кроме таблицы ничего не пиши
+### Таблица ###
+{data_tables_str}"""}]
+        completion = client.chat.completions.create(
+            model=type_network,
+            messages=messages
+        )
+        os.remove(in_name)
+        bot.delete_message(message.from_user.id, msg_temp)
+        df = pd.read_csv(StringIO(str(completion.choices[0].message.content)), sep=';')
+
+        df.to_excel(f'user_data/{message.from_user.id}_output.xlsx', index=False)
+
+        with open(f'user_data/{message.from_user.id}_output.xlsx', 'rb') as f1:
+            bot.send_document(message.chat.id, f1)
+    else:
+        bot.delete_message(message.from_user.id, msg_temp)
+        bot.send_message(message.from_user.id, 'Выберете требуемый режим')
+        main_menu(message)
+        return
 
 
 bot.polling()

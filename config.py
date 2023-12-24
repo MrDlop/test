@@ -1,4 +1,5 @@
 TOKEN = "6223135936:AAHj7gpcKVi36TG4bIZ4S971qzUlQNtJxeM"
+ADMIN = "https://t.me/MrDlop"
 API_KEY = [
     "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",
     "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",

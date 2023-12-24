@@ -16,12 +16,17 @@ class Company(SqlAlchemyBase):
     hashed_password = sqlalchemy.Column(sqlalchemy.String,
                                         nullable=True)
     max_num_users = sqlalchemy.Column(sqlalchemy.Integer)
+    telegram_id_chief = sqlalchemy.Column(sqlalchemy.Integer)
+    info = sqlalchemy.Column(sqlalchemy.String, default=" ")
+    info_year = sqlalchemy.Column(sqlalchemy.String, default=" ")
+    info_tendency = sqlalchemy.Column(sqlalchemy.String, default=" ")
 
-    def __init__(self, company_id: int, company_name: str, max_num_users: int, time: str):
+    def __init__(self, company_id: int, company_name: str, max_num_users: int, time: str, telegram_id_chief: int):
         self.company_id = company_id
         self.company_name = company_name
         self.time = datetime.datetime.strptime(time, "%d.%m.%y")
         self.max_num_users = max_num_users
+        self.telegram_id_chief = telegram_id_chief
 
     def set_password(self, password: str) -> None:
         self.hashed_password = generate_password_hash(password)
@@ -31,4 +36,3 @@ class Company(SqlAlchemyBase):
 
     def set_time(self, time: str) -> None:
         self.time = datetime.datetime.strptime(time, "%d.%m.%y")
-
