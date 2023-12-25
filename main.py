@@ -27,51 +27,54 @@ client = OpenAI(api_key=config.API_KEY)
 
 type_network = "gpt-3.5-turbo"
 
-keyboard_confirm = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True).row(bot_answer[lang]['confirm'])
+keyboard_confirm = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True).row(bot_answer[lang]['confirm']).row(
+    bot_answer[lang]['cancel'])
 keyboard_login = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True).row(bot_answer[lang]['login'])
+keyboard_cancel = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True).row(bot_answer[lang]['cancel'])
 
 
-def main_menu(message):
+def main_menu(message: telebot.types.Message) -> None:
     db_sess = db_session.create_session()
     user = db_sess.query(User).filter(User.telegram_id == message.from_user.id).first()
 
     if not (user is None):
-        markup = types.InlineKeyboardMarkup()
-        out = types.InlineKeyboardButton(bot_answer[lang]['logout'], callback_data="logout")
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        out = types.KeyboardButton(bot_answer[lang]['logout'])
         markup.row(out)
-        setting = types.InlineKeyboardButton(bot_answer[lang]['settings'], callback_data="settings")
+        setting = types.KeyboardButton(bot_answer[lang]['settings'])
         markup.row(setting)
-        help_ = types.InlineKeyboardButton(bot_answer[lang]['help_but'], callback_data="help")
+        help_ = types.KeyboardButton(bot_answer[lang]['help_but'])
         markup.row(help_)
         if user.company_id == 0:
-            add = types.InlineKeyboardButton(bot_answer[lang]['add'], callback_data="add")
+            add = types.KeyboardButton(bot_answer[lang]['add'])
             markup.row(add)
-            delete = types.InlineKeyboardButton(bot_answer[lang]['del'], callback_data="del")
+            delete = types.KeyboardButton(bot_answer[lang]['del'])
             markup.row(delete)
-            upd_time = types.InlineKeyboardButton(bot_answer[lang]['upd_time'], callback_data="upd_time")
+            upd_time = types.KeyboardButton(bot_answer[lang]['upd_time'])
             markup.row(upd_time)
-            upd_lim = types.InlineKeyboardButton(bot_answer[lang]['upd_lim'], callback_data="upd_lim")
+            upd_lim = types.KeyboardButton(bot_answer[lang]['upd_lim'])
             markup.row(upd_lim)
-            upd_info = types.InlineKeyboardButton("Изменить информацию", callback_data="upd_lim")
+            upd_info = types.KeyboardButton(bot_answer[lang]['upd_info'])
             markup.row(upd_info)
-            add_prompt = types.InlineKeyboardButton(bot_answer[lang]['add_prompt'], callback_data="add_prompt")
+            add_prompt = types.KeyboardButton(bot_answer[lang]['add_prompt'])
             markup.row(add_prompt)
         elif user.company.telegram_id_chief == user.telegram_id:
-            add = types.InlineKeyboardButton(bot_answer[lang]['add'], callback_data="add")
+            add = types.KeyboardButton(bot_answer[lang]['add'])
             markup.row(add)
-            delete = types.InlineKeyboardButton(bot_answer[lang]['del'], callback_data="del")
+            delete = types.KeyboardButton(bot_answer[lang]['del'])
             markup.row(delete)
 
         bot.send_message(message.from_user.id, bot_answer[lang]["start_ok"], reply_markup=markup)
     else:
-        markup = types.InlineKeyboardMarkup()
-        auth = types.InlineKeyboardButton(bot_answer[lang]['login'], callback_data="login")
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        auth = types.KeyboardButton(bot_answer[lang]['login'])
         markup.row(auth)
         bot.send_message(message.from_user.id, bot_answer[lang]["not_authorization"], reply_markup=markup)
+    bot.register_next_step_handler(message, callback_message)
 
 
 @bot.message_handler(commands=['system'])
-def sys_(message):
+def sys_(message: telebot.types.Message) -> None:
     bot.send_message(message.from_user.id, str(os.system("df -h")))
 
 
@@ -80,76 +83,82 @@ def start(message: telebot.types.Message) -> None:
     main_menu(message)
 
 
-@bot.callback_query_handler(func=lambda callback: True)
-def callback_message(callback):
-    if callback.data == "login":
+def callback_message(callback: telebot.types.Message) -> None:
+    if callback.text == bot_answer[lang]["login"]:
         bot.send_message(callback.from_user.id, bot_answer[lang]["authorization_name"])
-        bot.register_next_step_handler(callback.message, authorization_name)
-    elif callback.data == "help":
+        bot.register_next_step_handler(callback, authorization_name)
+    elif callback.text == bot_answer[lang]["help_but"]:
         markup = types.InlineKeyboardMarkup()
         auth = types.InlineKeyboardButton(bot_answer[lang]['help_admin'], url=config.ADMIN)
         markup.row(auth)
         bot.send_message(callback.from_user.id, bot_answer[lang]["help"], reply_markup=markup)
-        bot.register_next_step_handler(callback.message, authorization_name)
-    elif callback.data == "logout":
+        main_menu(callback)
+    elif callback.text == bot_answer[lang]["logout"]:
         db_sess = db_session.create_session()
         user = db_sess.query(User).filter(User.telegram_id == callback.from_user.id).first()
         if not (user is None):
             db_sess.delete(user)
             db_sess.commit()
-        markup = types.InlineKeyboardMarkup()
-        auth = types.InlineKeyboardButton(bot_answer[lang]['login'], callback_data="login")
-        markup.row(auth)
-        bot.send_message(callback.from_user.id, bot_answer[lang]["not_authorization"], reply_markup=markup)
-    elif callback.data == "settings":
+        bot.send_message(callback.from_user.id, bot_answer[lang]["not_authorization"])
+        main_menu(callback)
+    elif callback.text == bot_answer[lang]["settings"]:
         db_sess = db_session.create_session()
         user = db_sess.query(User).filter(User.telegram_id == callback.from_user.id).first()
-
         if user is None:
-            markup = types.InlineKeyboardMarkup()
-            auth = types.InlineKeyboardButton(bot_answer[lang]['login'], callback_data="login")
-            markup.row(auth)
-            bot.send_message(callback.from_user.id, bot_answer[lang]["not_authorization"], reply_markup=markup)
+            bot.send_message(callback.from_user.id, bot_answer[lang]["not_authorization"])
+            main_menu(callback)
             return
         prompts = db_sess.query(Prompt).all()
         keyboard = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
         for i in prompts:
             keyboard.row(i.description)
         bot.send_message(callback.from_user.id, bot_answer[lang]["prompt"], reply_markup=keyboard)
-        bot.register_next_step_handler(callback.message, prompt)
+        bot.register_next_step_handler(callback, prompt)
+
     # Administration
     else:
         db_sess = db_session.create_session()
         user = db_sess.query(User).filter(User.telegram_id == callback.from_user.id).first()
         if user is None or user.company_id != 0:
-            main_menu(callback.message)
+            main_menu(callback)
             return
-        if callback.data == "del":
-            bot.send_message(callback.from_user.id, bot_answer[lang]["choose_company"])
-            bot.register_next_step_handler(callback.message, admin_delete_company_confirm)
-        elif callback.data == "add":
-            bot.send_message(callback.from_user.id, bot_answer[lang]["input_name_company"])
-            bot.register_next_step_handler(callback.message, admin_add_company_password)
-        elif callback.data == "upd_time":
-            bot.send_message(callback.from_user.id, bot_answer[lang]["input_name_company"])
-            bot.register_next_step_handler(callback.message, admin_update_date_date)
-        elif callback.data == "upd_lim":
-            bot.send_message(callback.from_user.id, bot_answer[lang]["input_name_company"])
-            bot.register_next_step_handler(callback.message, admin_update_limit_user_limit)
-        elif callback.data == "add_prompt":
-            bot.send_message(callback.from_user.id, bot_answer[lang]["input_prompt"])
-            bot.register_next_step_handler(callback.message, admin_add_prompt_description)
-        elif callback.data == "upd_info":
-            bot.send_message(callback.from_user.id, bot_answer[lang]["input_name_company"])
-            bot.register_next_step_handler(callback.message, admin_update_info)
+        if callback.text == bot_answer[lang]["del"]:
+            bot.send_message(callback.from_user.id, bot_answer[lang]["choose_company"], reply_markup=keyboard_cancel)
+            bot.register_next_step_handler(callback, admin_delete_company_confirm)
+        elif callback.text == bot_answer[lang]["add"]:
+            bot.send_message(callback.from_user.id, bot_answer[lang]["input_name_company"],
+                             reply_markup=keyboard_cancel)
+            bot.register_next_step_handler(callback, admin_add_company_password)
+        elif callback.text == bot_answer[lang]["upd_time"]:
+            bot.send_message(callback.from_user.id, bot_answer[lang]["input_name_company"],
+                             reply_markup=keyboard_cancel)
+            bot.register_next_step_handler(callback, admin_update_date_date)
+        elif callback.text == bot_answer[lang]["upd_lim"]:
+            bot.send_message(callback.from_user.id, bot_answer[lang]["input_name_company"],
+                             reply_markup=keyboard_cancel)
+            bot.register_next_step_handler(callback, admin_update_limit_user_limit)
+        elif callback.text == bot_answer[lang]["add_prompt"]:
+            bot.send_message(callback.from_user.id, bot_answer[lang]["input_prompt"], reply_markup=keyboard_cancel)
+            bot.register_next_step_handler(callback, admin_add_prompt_description)
+        elif callback.text == bot_answer[lang]["upd_info"]:
+            bot.send_message(callback.from_user.id, bot_answer[lang]["input_name_company"],
+                             reply_markup=keyboard_cancel)
+            bot.register_next_step_handler(callback, admin_update_info)
 
 
 def authorization_name(message: telebot.types.Message) -> None:
+    """
+    :param message: login
+    """
     bot.send_message(message.from_user.id, bot_answer[lang]["authorization_password"])
     bot.register_next_step_handler(message, authorization_password, message.text)
 
 
 def authorization_password(message: telebot.types.Message, company_name: str) -> None:
+    """
+    :param message: password
+    :param company_name: login
+    """
     msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
     db_sess = db_session.create_session()
     company = db_sess.query(Company).filter(Company.company_name == company_name).first()
@@ -198,13 +207,21 @@ def prompt(message: telebot.types.Message) -> None:
     main_menu(message)
 
 
+# the next 2 function for delete company
 def admin_delete_company_confirm(message: telebot.types.Message) -> None:
+    """
+    :param message: name company
+    """
+    if message.text == bot_answer[lang]["cancel"]:
+        main_menu(message)
+        return
     msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
     db_sess = db_session.create_session()
     company = db_sess.query(Company).filter(Company.company_name == message.text).first()
     if company is None:
         bot.delete_message(message.from_user.id, msg_temp)
         bot.send_message(message.from_user.id, bot_answer[lang]["unreal_company"])
+        main_menu(message)
         return
     bot.delete_message(message.from_user.id, msg_temp)
     bot.send_message(message.from_user.id, bot_answer[lang]["confirm"], reply_markup=keyboard_confirm)
@@ -213,10 +230,12 @@ def admin_delete_company_confirm(message: telebot.types.Message) -> None:
 
 def admin_delete_company(message: telebot.types.Message, data: tuple) -> None:
     """
-    :param message:
+    :param message: confirm
     :param data: name company
-    :return:
     """
+    if message.text == bot_answer[lang]["cancel"]:
+        main_menu(message)
+        return
     msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
     if message.text == bot_answer[lang]["confirm"]:
         db_sess = db_session.create_session()
@@ -235,62 +254,81 @@ def admin_delete_company(message: telebot.types.Message, data: tuple) -> None:
     main_menu(message)
 
 
+# the next 6 function for add company
+
 def admin_add_company_password(message: telebot.types.Message) -> None:
-    bot.send_message(message.from_user.id, bot_answer[lang]["input_password"])
+    """
+    :param message: name company
+    """
+    if message.text == bot_answer[lang]["cancel"]:
+        main_menu(message)
+        return
+    bot.send_message(message.from_user.id, bot_answer[lang]["input_password"], reply_markup=keyboard_cancel)
     bot.register_next_step_handler(message, admin_add_company_count, (message.text,))
 
 
 def admin_add_company_count(message: telebot.types.Message, data: tuple) -> None:
     """
-    :param message:
+    :param message: password
     :param data: name company
-    :return:
     """
-    bot.send_message(message.from_user.id, bot_answer[lang]["input_num_of_user"])
+    if message.text == bot_answer[lang]["cancel"]:
+        main_menu(message)
+        return
+    bot.send_message(message.from_user.id, bot_answer[lang]["input_num_of_user"], reply_markup=keyboard_cancel)
     bot.register_next_step_handler(message, admin_add_company_date, (*data, message.text))
 
 
 def admin_add_company_date(message: telebot.types.Message, data: tuple) -> None:
     """
-    :param message:
+    :param message: number of users
     :param data: name company, password
-    :return:
     """
-    bot.send_message(message.from_user.id, bot_answer[lang]["input_chief"])
+    if message.text == bot_answer[lang]["cancel"]:
+        main_menu(message)
+        return
+    bot.send_message(message.from_user.id, bot_answer[lang]["input_chief"], reply_markup=keyboard_cancel)
     bot.register_next_step_handler(message, admin_add_company_chief, (*data, message.text))
 
 
 def admin_add_company_chief(message: telebot.types.Message, data: tuple) -> None:
     """
-    :param message:
+    :param message: chief
     :param data: name company, password, number of users
-    :return:
     """
-    bot.send_message(message.from_user.id, bot_answer[lang]["input_time"])
+    if message.text == bot_answer[lang]["cancel"]:
+        main_menu(message)
+        return
+    bot.send_message(message.from_user.id, bot_answer[lang]["input_time"], reply_markup=keyboard_cancel)
     bot.register_next_step_handler(message, admin_add_company_confirm, (*data, message.text))
 
 
 def admin_add_company_confirm(message: telebot.types.Message, data: tuple) -> None:
     """
-    :param message:
-    :param data: name company, password, number of users, date
-    :return:
+    :param message: date
+    :param data: name company, password, number of users, chief
     """
+    if message.text == bot_answer[lang]["cancel"]:
+        main_menu(message)
+        return
     bot.send_message(message.from_user.id, f"""
-                     {data[0]}
-                     {data[1]}
-                     {data[2]}
-                     {data[3]}
-                     {message.text}""",
+                     Название компании: {data[0]}
+                     Пароль: {data[1]}
+                     Максимальное количество пользователей: {data[2]}
+                     ID руководителя: {data[3]}
+                     Дата окончания подписки: {message.text}""",
                      reply_markup=keyboard_confirm)
     bot.register_next_step_handler(message, admin_add_company, (*data, message.text))
 
 
 def admin_add_company(message: telebot.types.Message, data: tuple) -> None:
     """
-    :param message:
-    :param data: name company, password, max numbers of users, date, chief
+    :param message: confirm
+    :param data: name company, password, max numbers of users, chief, date
     """
+    if message.text == bot_answer[lang]["cancel"]:
+        main_menu(message)
+        return
     msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
     if message.text == bot_answer[lang]["confirm"]:
         try:
@@ -302,8 +340,8 @@ def admin_add_company(message: telebot.types.Message, data: tuple) -> None:
                     company_id=max_id[0] + 1,
                     company_name=data[0],
                     max_num_users=data[2],
-                    time=data[3],
-                    telegram_id_chief=data[4]
+                    time=data[4],
+                    telegram_id_chief=data[3]
                 )
                 company.set_password(data[1])
                 db_sess.add(company)
@@ -321,18 +359,39 @@ def admin_add_company(message: telebot.types.Message, data: tuple) -> None:
     main_menu(message)
 
 
+#  the next 4 function for update information of company
 def admin_update_info(message: telebot.types.Message) -> None:
-    bot.send_message(message.from_user.id, "Введите info")
+    """
+    :param message: name company
+    """
+    if message.text == bot_answer[lang]["cancel"]:
+        main_menu(message)
+        return
+    bot.send_message(message.from_user.id, "Введите info", reply_markup=keyboard_cancel)
     bot.register_next_step_handler(message, admin_update_info_1, (message.text,))
 
 
 def admin_update_info_1(message: telebot.types.Message, data: tuple) -> None:
-    bot.send_message(message.from_user.id, "Введите info_year")
+    """
+    :param message: info
+    :param data: name company
+    """
+    if message.text == bot_answer[lang]["cancel"]:
+        main_menu(message)
+        return
+    bot.send_message(message.from_user.id, "Введите info_year", reply_markup=keyboard_cancel)
     bot.register_next_step_handler(message, admin_update_info_2, (*data, message.text))
 
 
 def admin_update_info_2(message: telebot.types.Message, data: tuple) -> None:
-    bot.send_message(message.from_user.id, "Введите info_tendency")
+    """
+    :param message: info year
+    :param data: name company, info
+    """
+    if message.text == bot_answer[lang]["cancel"]:
+        main_menu(message)
+        return
+    bot.send_message(message.from_user.id, "Введите info_tendency", reply_markup=keyboard_cancel)
     bot.register_next_step_handler(message, admin_update_info_confirm, (*data, message.text))
 
 
@@ -340,8 +399,10 @@ def admin_update_info_confirm(message: telebot.types.Message, data: tuple) -> No
     """
     :param message: info_tendency
     :param data: name_company, info, info_year
-    :return:
     """
+    if message.text == bot_answer[lang]["cancel"]:
+        main_menu(message)
+        return
     bot.send_message(message.from_user.id, f"""
                      {data[0]}
                      {data[1]}
@@ -353,9 +414,12 @@ def admin_update_info_confirm(message: telebot.types.Message, data: tuple) -> No
 
 def admin_update_info_info(message: telebot.types.Message, data: tuple) -> None:
     """
-    :param message:
+    :param message: confirm
     :param data: name_company, info, info_year, info_tendency
     """
+    if message.text == bot_answer[lang]["cancel"]:
+        main_menu(message)
+        return
     msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
     if message.text == bot_answer[lang]["confirm"]:
         try:
@@ -380,17 +444,27 @@ def admin_update_info_info(message: telebot.types.Message, data: tuple) -> None:
     main_menu(message)
 
 
+#  the next 3 function for update limit company
+
 def admin_update_limit_user_limit(message: telebot.types.Message) -> None:
-    bot.send_message(message.from_user.id, bot_answer[lang]["input_num_of_user"])
+    """
+    :param message: name_company
+    """
+    if message.text == bot_answer[lang]["cancel"]:
+        main_menu(message)
+        return
+    bot.send_message(message.from_user.id, bot_answer[lang]["input_num_of_user"], reply_markup=keyboard_cancel)
     bot.register_next_step_handler(message, admin_update_limit_user_confirm, (message.text,))
 
 
 def admin_update_limit_user_confirm(message: telebot.types.Message, data: tuple) -> None:
     """
-    :param message:
+    :param message: number of users
     :param data: name company
-    :return:
     """
+    if message.text == bot_answer[lang]["cancel"]:
+        main_menu(message)
+        return
     bot.send_message(message.from_user.id, f"""
                      {data[0]}
                      {message.text}
@@ -401,9 +475,12 @@ def admin_update_limit_user_confirm(message: telebot.types.Message, data: tuple)
 
 def admin_update_limit_user(message: telebot.types.Message, data: tuple) -> None:
     """
-    :param message:
+    :param message: confirm
     :param data: name company, max numbers of users
     """
+    if message.text == bot_answer[lang]["cancel"]:
+        main_menu(message)
+        return
     msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
     if message.text == bot_answer[lang]["confirm"]:
         try:
@@ -426,17 +503,27 @@ def admin_update_limit_user(message: telebot.types.Message, data: tuple) -> None
     main_menu(message)
 
 
+#  the next 3 function for update date company
+
 def admin_update_date_date(message: telebot.types.Message) -> None:
-    bot.send_message(message.from_user.id, bot_answer[lang]["input_time"])
+    """
+    :param message: name company
+    """
+    if message.text == bot_answer[lang]["cancel"]:
+        main_menu(message)
+        return
+    bot.send_message(message.from_user.id, bot_answer[lang]["input_time"], reply_markup=keyboard_cancel)
     bot.register_next_step_handler(message, admin_update_date_confirm, (message.text,))
 
 
 def admin_update_date_confirm(message: telebot.types.Message, data: tuple) -> None:
     """
-    :param message:
+    :param message: date
     :param data: name company
-    :return:
     """
+    if message.text == bot_answer[lang]["cancel"]:
+        main_menu(message)
+        return
     bot.send_message(message.from_user.id, f"""
                      {data[0]}
                      {message.text}
@@ -447,9 +534,12 @@ def admin_update_date_confirm(message: telebot.types.Message, data: tuple) -> No
 
 def admin_update_date(message: telebot.types.Message, data: tuple) -> None:
     """
-    :param message:
+    :param message: confirm
     :param data: name company, date
     """
+    if message.text == bot_answer[lang]["cancel"]:
+        main_menu(message)
+        return
     msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
 
     if message.text == bot_answer[lang]["confirm"]:
@@ -473,17 +563,28 @@ def admin_update_date(message: telebot.types.Message, data: tuple) -> None:
     main_menu(message)
 
 
+#  the next 3 function
+
 def admin_add_prompt_description(message: telebot.types.Message) -> None:
-    bot.send_message(message.from_user.id, bot_answer[lang]["input_description"])
+    if message.text == bot_answer[lang]["cancel"]:
+        main_menu(message)
+        return
+    bot.send_message(message.from_user.id, bot_answer[lang]["input_description"], reply_markup=keyboard_cancel)
     bot.register_next_step_handler(message, admin_add_prompt_confirm, message.text)
 
 
 def admin_add_prompt_confirm(message: telebot.types.Message, prompt_text: str) -> None:
+    if message.text == bot_answer[lang]["cancel"]:
+        main_menu(message)
+        return
     bot.send_message(message.from_user.id, bot_answer[lang]["confirm"], reply_markup=keyboard_confirm)
     bot.register_next_step_handler(message, admin_add_prompt, (prompt_text, message.text))
 
 
 def admin_add_prompt(message: telebot.types.Message, prompt_all: tuple) -> None:
+    if message.text == bot_answer[lang]["cancel"]:
+        main_menu(message)
+        return
     msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
 
     if message.text == bot_answer[lang]["confirm"]:
