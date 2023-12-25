@@ -110,6 +110,7 @@ def callback_message(callback: telebot.types.Message) -> None:
         keyboard = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
         for i in prompts:
             keyboard.row(i.description)
+        keyboard.row(bot_answer[lang]["cancel"])
         bot.send_message(callback.from_user.id, bot_answer[lang]["prompt"], reply_markup=keyboard)
         bot.register_next_step_handler(callback, prompt)
 
@@ -241,6 +242,9 @@ def authorization_password(message: telebot.types.Message, company_name: str) ->
 
 
 def prompt(message: telebot.types.Message) -> None:
+    if message.text == bot_answer[lang]["cancel"]:
+        main_menu(message)
+        return
     msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
     db_sess = db_session.create_session()
     user = db_sess.query(User).filter(User.telegram_id == message.from_user.id).first()
