@@ -59,9 +59,7 @@ def main_menu(message: telebot.types.Message) -> None:
             add_prompt = types.KeyboardButton(bot_answer[lang]['add_prompt'])
             markup.row(add_prompt)
         elif user.company.telegram_id_chief == user.telegram_id:
-            add = types.KeyboardButton(bot_answer[lang]['add'])
-            markup.row(add)
-            delete = types.KeyboardButton(bot_answer[lang]['del'])
+            delete = types.KeyboardButton(bot_answer[lang]['del_user'])
             markup.row(delete)
 
         bot.send_message(message.from_user.id, bot_answer[lang]["start_ok"], reply_markup=markup)
@@ -119,12 +117,24 @@ def callback_message(callback: telebot.types.Message) -> None:
     else:
         db_sess = db_session.create_session()
         user = db_sess.query(User).filter(User.telegram_id == callback.from_user.id).first()
-        if user is None or user.company_id != 0:
+        if user is None:
             main_menu(callback)
             return
-        if callback.text == bot_answer[lang]["del"]:
+        if callback.text == bot_answer[lang]["del_user"] and user.company.telegram_id_chief == user.telegram_id:
+            users = db_sess.query(CompanyUser).filter(CompanyUser.company_id == user.company_id).all()
+            answer = ""
+            for i in users:
+                answer += str(i.telegram_id) + "\n"
+
+            bot.send_message(callback.from_user.id, answer + bot_answer[lang]["del_user_choose"],
+                             reply_markup=keyboard_cancel)
+            bot.register_next_step_handler(callback, chief_delete_user_confirm)
+        elif user.company_id != 0:
+            main_menu(callback)
+            return
+        elif callback.text == bot_answer[lang]["del"]:
             bot.send_message(callback.from_user.id, bot_answer[lang]["choose_company"], reply_markup=keyboard_cancel)
-            bot.register_next_step_handler(callback, admin_delete_company_confirm)
+            bot.register_next_step_handler(callback, admin_delete_company)
         elif callback.text == bot_answer[lang]["add"]:
             bot.send_message(callback.from_user.id, bot_answer[lang]["input_name_company"],
                              reply_markup=keyboard_cancel)
@@ -144,6 +154,43 @@ def callback_message(callback: telebot.types.Message) -> None:
             bot.send_message(callback.from_user.id, bot_answer[lang]["input_name_company"],
                              reply_markup=keyboard_cancel)
             bot.register_next_step_handler(callback, admin_update_info)
+
+
+def chief_delete_user_confirm(message: telebot.types.Message) -> None:
+    """
+    :param message: telegram id
+    """
+    if message.text == bot_answer[lang]["cancel"]:
+        main_menu(message)
+        return
+    bot.send_message(message.from_user.id, message.text + '/n' + bot_answer[lang]["confirm"],
+                     reply_markup=keyboard_confirm)
+    bot.register_next_step_handler(message, chief_delete_user, (message.text,))
+
+
+def chief_delete_user(message: telebot.types.Message, data: tuple) -> None:
+    """
+    :param message: confirm
+    :param data: telegram id
+    """
+    msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
+    if message.text == bot_answer[lang]["confirm"]:
+        db_sess = db_session.create_session()
+        user = db_sess.query(User).filter(User.telegram_id == message.from_user.id).first()
+        company_users = db_sess.query(CompanyUser).filter(
+            CompanyUser.company_id == user.company_id and CompanyUser.telegram_id == data[0]).all()
+
+        users = db_sess.query(User).filter(
+            User.company_id == user.company_id and CompanyUser.telegram_id == data[0]).all()
+        for user in users:
+            db_sess.delete(user)
+        for user in company_users:
+            db_sess.delete(user)
+        db_sess.commit()
+
+    bot.delete_message(message.from_user.id, msg_temp)
+    bot.send_message(message.from_user.id, bot_answer[lang]["ok"])
+    main_menu(message)
 
 
 def authorization_name(message: telebot.types.Message) -> None:
