@@ -690,11 +690,11 @@ def text_handler(message: telebot.types.Message) -> None:
     elif user.prompt == "table-table":
         bot.delete_message(message.from_user.id, msg_temp)
         bot.send_message(message.from_user.id, "Отправьте таблицу")
-        bot.register_next_step_handler(message, table_send)
+        bot.register_next_step_handler(message, handle_document)
     elif user.prompt == "word-table":
         bot.delete_message(message.from_user.id, msg_temp)
         bot.send_message(message.from_user.id, "Отправьте таблицу")
-        bot.register_next_step_handler(message, word_send)
+        bot.register_next_step_handler(message, handle_document)
     elif user.prompt == "close-post":
         bot.delete_message(message.from_user.id, msg_temp)
         bot.send_message(message.from_user.id, 'Введите тему поста')
@@ -717,121 +717,6 @@ def close_post_req(message):
 
         bot.delete_message(message.from_user.id, msg_temp)
         bot.send_message(message.from_user.id, str(completion.choices[0].message.content))
-    except:
-        bot.delete_message(message.from_user.id, msg_temp)
-        main_menu(message)
-
-
-def table_send(message):
-    msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
-    try:
-        if message.document.file_size > 100 * 1000 * 1000:
-            bot.delete_message(message.from_user.id, msg_temp)
-            bot.send_message(message.from_user.id, "Файл должен быть меньше 100 Мб")
-            main_menu(message)
-            return
-        file_info = bot.get_file(message.document.file_id)
-        if file_info.file_path[file_info.file_path.rfind('.'):] != '.xlsx':
-            bot.delete_message(message.from_user.id, msg_temp)
-            bot.send_message(message.from_user.id, "Файл должен быть формата .xlsx")
-            main_menu(message)
-            return
-        src = os.path.join('user_data/', str(message.from_user.id))
-        ext = ".docx"
-        in_name = src + ext
-        downloaded_file = bot.download_file(file_info.file_path)
-
-        with open(in_name, 'wb') as new_file:
-            new_file.write(downloaded_file)
-        df = pd.read_excel(in_name)
-
-        data_tables_str = df.to_csv(index=False, sep=';')
-
-        messages = [{"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": f"""### Задание ###
-        Представлена таблица - в одной строке вся информация об отдельно взятой продаже. 
-        Создай таблицу с 4 столбцами. в первом - артикул. во втором, денежный объем его продаж.
-        в третьем, суммарный объем его продаж в штуках. в четвертом, 
-        его остаток на самый последний момент. 
-        Ответа приведи в виде таблицы в csv формате разделитель ; 
-        названия столбцов пиши кроме таблицы ничего не пиши
-        ### Таблица ###
-        {data_tables_str}"""}]
-        completion = client.chat.completions.create(
-            model=type_network,
-            messages=messages
-        )
-        os.remove(in_name)
-        bot.delete_message(message.from_user.id, msg_temp)
-        df = pd.read_csv(StringIO(str(completion.choices[0].message.content)), sep=';')
-
-        df.to_excel(f'user_data/{message.from_user.id}_output.xlsx', index=False)
-
-        with open(f'user_data/{message.from_user.id}_output.xlsx', 'rb') as f1:
-            bot.send_document(message.chat.id, f1)
-    except:
-        bot.delete_message(message.from_user.id, msg_temp)
-        main_menu(message)
-
-
-def word_send(message):
-    msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
-    try:
-        if message.document.file_size > 100 * 1000 * 1000:
-            bot.delete_message(message.from_user.id, msg_temp)
-            bot.send_message(message.from_user.id, "Файл должен быть меньше 100 Мб")
-            main_menu(message)
-            return
-        file_info = bot.get_file(message.document.file_id)
-        if file_info.file_path[file_info.file_path.rfind('.'):] != '.docx':
-            bot.delete_message(message.from_user.id, msg_temp)
-            bot.send_message(message.from_user.id, "Файл должен быть формата .docx")
-            main_menu(message)
-            return
-        src = os.path.join('user_data/', str(message.from_user.id))
-        ext = ".docx"
-        in_name = src + ext
-        downloaded_file = bot.download_file(file_info.file_path)
-
-        with open(in_name, 'wb') as new_file:
-            new_file.write(downloaded_file)
-        doc = Document(in_name)
-        all_tables = doc.tables
-        data_tables = {i: None for i in range(len(all_tables))}
-        for i, table in enumerate(all_tables):
-            data_tables[i] = [[] for _ in range(len(table.rows))]
-            for j, row in enumerate(table.rows):
-                for cell in row.cells:
-                    data_tables[i][j].append(cell.text)
-
-        data_tables_str = ""
-        for i in data_tables:
-            for j in data_tables[i]:
-                data_tables_str += ';'.join(j)
-            data_tables_str += '\n'
-
-        messages = [{"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": f"""### Задание ###
-        Представлена таблица - в одной строке вся информация об отдельно взятой продаже. 
-        Создай таблицу с 4 столбцами. в первом - артикул. во втором, денежный объем его продаж.
-        в третьем, суммарный объем его продаж в штуках. в четвертом, 
-        его остаток на самый последний момент. 
-        Ответа приведи в виде таблицы в csv формате разделитель ; 
-        названия столбцов пиши кроме таблицы ничего не пиши
-        ### Таблица ###
-        {data_tables_str}"""}]
-        completion = client.chat.completions.create(
-            model=type_network,
-            messages=messages
-        )
-        os.remove(in_name)
-        bot.delete_message(message.from_user.id, msg_temp)
-        df = pd.read_csv(StringIO(str(completion.choices[0].message.content)), sep=';')
-
-        df.to_excel(f'user_data/{message.from_user.id}_output.xlsx', index=False)
-
-        with open(f'user_data/{message.from_user.id}_output.xlsx', 'rb') as f1:
-            bot.send_document(message.chat.id, f1)
     except:
         bot.delete_message(message.from_user.id, msg_temp)
         main_menu(message)
