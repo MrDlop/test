@@ -131,7 +131,7 @@ def callback_message(callback: telebot.types.Message) -> None:
                              reply_markup=keyboard_cancel)
             bot.register_next_step_handler(callback, chief_delete_user_confirm)
         elif user.company_id != 0:
-            main_menu(callback)
+            text_handler(message)
             return
         elif callback.text == bot_answer[lang]["del"]:
             bot.send_message(callback.from_user.id, bot_answer[lang]["choose_company"], reply_markup=keyboard_cancel)
@@ -155,6 +155,9 @@ def callback_message(callback: telebot.types.Message) -> None:
             bot.send_message(callback.from_user.id, bot_answer[lang]["input_name_company"],
                              reply_markup=keyboard_cancel)
             bot.register_next_step_handler(callback, admin_update_info)
+        else:
+            text_handler(message)
+            return
 
 
 def chief_delete_user_confirm(message: telebot.types.Message) -> None:
