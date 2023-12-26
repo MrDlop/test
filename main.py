@@ -482,9 +482,9 @@ def admin_update_info_info(message: telebot.types.Message, data: tuple) -> None:
                 bot.send_message(message.from_user.id, bot_answer[lang]["input_incorrect"])
                 main_menu(message)
                 return
-            company[0].info = data[1]
-            company[0].info_year = data[2]
-            company[0].info_tendency = data[3]
+            company.info = data[1]
+            company.info_year = data[2]
+            company.info_tendency = data[3]
             db_sess.commit()
         except ValueError:
             bot.delete_message(message.from_user.id, msg_temp)
