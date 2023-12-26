@@ -725,7 +725,7 @@ def close_post_req(message):
 @bot.message_handler(content_types=["document"])
 def handle_document(message):
     msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
-    try:
+    if True:
         db_sess = db_session.create_session()
         user = db_sess.query(User).filter(User.telegram_id == message.from_user.id).first()
 
@@ -844,7 +844,7 @@ def handle_document(message):
             bot.delete_message(message.from_user.id, msg_temp)
             main_menu(message)
             return
-    except:
+    else:
         bot.delete_message(message.from_user.id, msg_temp)
         main_menu(message)
 
