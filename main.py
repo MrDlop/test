@@ -58,8 +58,6 @@ def main_menu(message: telebot.types.Message) -> None:
             markup.row(upd_info)
             add_prompt = types.KeyboardButton(bot_answer[lang]['add_prompt'])
             markup.row(add_prompt)
-            go = types.KeyboardButton('Приступить к работе')
-            markup.row(go)
         elif user.company.telegram_id_chief == user.telegram_id:
             delete = types.KeyboardButton(bot_answer[lang]['del_user'])
             markup.row(delete)
@@ -115,9 +113,7 @@ def callback_message(callback: telebot.types.Message) -> None:
         keyboard.row(bot_answer[lang]["cancel"])
         bot.send_message(callback.from_user.id, bot_answer[lang]["prompt"], reply_markup=keyboard)
         bot.register_next_step_handler(callback, prompt)
-    elif callback.text == 'Приступить к работе':
-        text_handler(callback)
-        return
+ 
     # Administration
     else:
         db_sess = db_session.create_session()
@@ -257,7 +253,35 @@ def prompt(message: telebot.types.Message) -> None:
         user.prompt = prompt_.prompt
     db_sess.commit()
     bot.delete_message(message.from_user.id, msg_temp)
-    main_menu(message)
+    msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
+    user = db_sess.query(User).filter(User.telegram_id == message.from_user.id).first()
+
+    if user is None:
+        bot.delete_message(message.from_user.id, msg_temp)
+        main_menu(message)
+        return
+    if user.company.time <= datetime.datetime.now():
+        bot.delete_message(message.from_user.id, msg_temp)
+        bot.send_message(message.from_user.id, bot_answer[lang]["end_time"])
+        main_menu(message)
+        return
+    if user.prompt == "free_chat":
+        bot.delete_message(message.from_user.id, msg_temp)
+        bot.send_message(message.from_user.id, "Нейросеть готова ответить на ваш вопрос. Введите его")
+        bot.register_next_step_handler(message, free_chat)
+
+    elif user.prompt == "table-table":
+        bot.delete_message(message.from_user.id, msg_temp)
+        bot.send_message(message.from_user.id, "Отправьте таблицу файлом без коментариев")
+        bot.register_next_step_handler(message, handle_document)
+    elif user.prompt == "word-table":
+        bot.delete_message(message.from_user.id, msg_temp)
+        bot.send_message(message.from_user.id, "Отправьте таблицу")
+        bot.register_next_step_handler(message, handle_document)
+    elif user.prompt == "close-post":
+        bot.delete_message(message.from_user.id, msg_temp)
+        bot.send_message(message.from_user.id, 'Введите тему поста')
+        bot.register_next_step_handler(message, close_post_req)
 
 
 # the next 2 function for delete company
@@ -659,41 +683,6 @@ def admin_add_prompt(message: telebot.types.Message, prompt_all: tuple) -> None:
     main_menu(message)
 
 
-@bot.message_handler(content_types=["text"])
-def text_handler(message: telebot.types.Message) -> None:
-    if message.text == '/start':
-        start(message)
-        return
-    msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
-    db_sess = db_session.create_session()
-    user = db_sess.query(User).filter(User.telegram_id == message.from_user.id).first()
-
-    if user is None:
-        bot.delete_message(message.from_user.id, msg_temp)
-        main_menu(message)
-        return
-    if user.company.time <= datetime.datetime.now():
-        bot.delete_message(message.from_user.id, msg_temp)
-        bot.send_message(message.from_user.id, bot_answer[lang]["end_time"])
-        main_menu(message)
-        return
-    if user.prompt == "free_chat":
-        bot.delete_message(message.from_user.id, msg_temp)
-        bot.send_message(message.from_user.id, "Нейросеть готова ответить на ваш вопрос. Введите его")
-        bot.register_next_step_handler(message, free_chat)
-
-    elif user.prompt == "table-table":
-        bot.delete_message(message.from_user.id, msg_temp)
-        bot.send_message(message.from_user.id, "Отправьте таблицу файлом без коментариев")
-        bot.register_next_step_handler(message, handle_document)
-    elif user.prompt == "word-table":
-        bot.delete_message(message.from_user.id, msg_temp)
-        bot.send_message(message.from_user.id, "Отправьте таблицу")
-        bot.register_next_step_handler(message, handle_document)
-    elif user.prompt == "close-post":
-        bot.delete_message(message.from_user.id, msg_temp)
-        bot.send_message(message.from_user.id, 'Введите тему поста')
-        bot.register_next_step_handler(message, close_post_req)
 
 def free_chat(message):
     msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
@@ -752,7 +741,7 @@ def handle_document(message):
                 main_menu(message)
                 return
             file_info = bot.get_file(message.document.file_id)
-            if file_info.file_path[file_info.file_path.rfind('.'):] != '.docx':
+            if file_info.file_path[file_info.file_path.rfind('.'):].lower() != '.docx':
                 bot.delete_message(message.from_user.id, msg_temp)
                 bot.send_message(message.from_user.id, "Файл должен быть формата .docx")
                 main_menu(message)
@@ -773,7 +762,6 @@ def handle_document(message):
                     for cell in row.cells:
                         data_tables[i][j].append(cell.text)
 
-            print(data_tables)
             data_tables_str = ""
             for i in data_tables:
                 for j in data_tables[i]:
@@ -809,7 +797,7 @@ def handle_document(message):
                 main_menu(message)
                 return
             file_info = bot.get_file(message.document.file_id)
-            if file_info.file_path[file_info.file_path.rfind('.'):] != '.xlsx':
+            if file_info.file_path[file_info.file_path.rfind('.'):].lower() != '.xlsx':
                 bot.delete_message(message.from_user.id, msg_temp)
                 bot.send_message(message.from_user.id, "Файл должен быть формата .xlsx")
                 main_menu(message)
