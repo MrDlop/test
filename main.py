@@ -678,18 +678,11 @@ def text_handler(message: telebot.types.Message) -> None:
         main_menu(message)
         return
     if user.prompt == "free_chat":
-        messages = [{"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": message.text}]
-        completion = client.chat.completions.create(
-            model=type_network,
-            messages=messages
-        )
-
         bot.delete_message(message.from_user.id, msg_temp)
-        bot.send_message(message.from_user.id, str(completion.choices[0].message.content))
+        bot.send_message(message.from_user.id, "Нейросеть готова ответить на ваш вопрос. Введите его")
     elif user.prompt == "table-table":
         bot.delete_message(message.from_user.id, msg_temp)
-        bot.send_message(message.from_user.id, "Отправьте таблицу")
+        bot.send_message(message.from_user.id, "Отправьте таблицу файлом без коментариев")
         bot.register_next_step_handler(message, handle_document)
     elif user.prompt == "word-table":
         bot.delete_message(message.from_user.id, msg_temp)
@@ -699,6 +692,18 @@ def text_handler(message: telebot.types.Message) -> None:
         bot.delete_message(message.from_user.id, msg_temp)
         bot.send_message(message.from_user.id, 'Введите тему поста')
         bot.register_next_step_handler(message, close_post_req)
+
+def free_chat(message):
+    msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
+
+    messages = [{"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": message.text}]
+    completion = client.chat.completions.create(
+            model=type_network,
+            messages=messages
+        )
+    bot.send_message(message.from_user.id, str(completion.choices[0].message.content))
+    bot.delete_message(message.from_user.id, msg_temp)
 
 
 def close_post_req(message):
