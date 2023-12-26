@@ -699,6 +699,10 @@ def free_chat(message):
     bot.send_message(message.from_user.id, str(completion.choices[0].message.content))
     bot.delete_message(message.from_user.id, msg_temp)
 
+    bot.send_message(message.from_user.id, "Нейросеть готова ответить на ваш вопрос. Введите его",
+                     reply_markup=keyboard_cancel)
+    bot.register_next_step_handler(message, free_chat)
+
 
 def close_post_req(message):
     if message.text == bot_answer[lang]["cancel"]:
@@ -719,6 +723,9 @@ def close_post_req(message):
 
         bot.delete_message(message.from_user.id, msg_temp)
         bot.send_message(message.from_user.id, str(completion.choices[0].message.content))
+
+        bot.send_message(message.from_user.id, 'Введите тему поста', reply_markup=keyboard_cancel)
+        bot.register_next_step_handler(message, close_post_req)
     except:
         bot.delete_message(message.from_user.id, msg_temp)
         main_menu(message)
@@ -799,6 +806,10 @@ def handle_document(message):
 
             with open(f'user_data/{message.from_user.id}_output.xlsx', 'rb') as f1:
                 bot.send_document(message.chat.id, f1)
+
+            bot.send_message(message.from_user.id, "Отправьте таблицу файлом без коментариев",
+                             reply_markup=keyboard_cancel)
+            bot.register_next_step_handler(message, handle_document)
         elif user.prompt == 'table-table':
             if message.document.file_size > 100 * 1000 * 1000:
                 bot.delete_message(message.from_user.id, msg_temp)
@@ -844,6 +855,10 @@ def handle_document(message):
 
             with open(f'user_data/{message.from_user.id}_output.xlsx', 'rb') as f1:
                 bot.send_document(message.chat.id, f1)
+
+            bot.send_message(message.from_user.id, "Отправьте таблицу",
+                             reply_markup=keyboard_cancel)
+            bot.register_next_step_handler(message, handle_document)
         else:
             bot.delete_message(message.from_user.id, msg_temp)
             main_menu(message)
