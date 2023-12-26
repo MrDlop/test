@@ -116,7 +116,7 @@ def callback_message(callback: telebot.types.Message) -> None:
         bot.send_message(callback.from_user.id, bot_answer[lang]["prompt"], reply_markup=keyboard)
         bot.register_next_step_handler(callback, prompt)
     elif callback.text == 'Приступить к работе':
-        text_handler(message)
+        text_handler(callback)
         return
     # Administration
     else:
