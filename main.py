@@ -113,7 +113,7 @@ def callback_message(callback: telebot.types.Message) -> None:
         keyboard.row(bot_answer[lang]["cancel"])
         bot.send_message(callback.from_user.id, bot_answer[lang]["prompt"], reply_markup=keyboard)
         bot.register_next_step_handler(callback, prompt)
- 
+
     # Administration
     else:
         db_sess = db_session.create_session()
@@ -130,7 +130,7 @@ def callback_message(callback: telebot.types.Message) -> None:
             bot.send_message(callback.from_user.id, answer + bot_answer[lang]["del_user_choose"],
                              reply_markup=keyboard_cancel)
             bot.register_next_step_handler(callback, chief_delete_user_confirm)
-        
+
         elif callback.text == bot_answer[lang]["del"]:
             bot.send_message(callback.from_user.id, bot_answer[lang]["choose_company"], reply_markup=keyboard_cancel)
             bot.register_next_step_handler(callback, admin_delete_company_confirm)
@@ -267,20 +267,21 @@ def prompt(message: telebot.types.Message) -> None:
         return
     if user.prompt == "free_chat":
         bot.delete_message(message.from_user.id, msg_temp)
-        bot.send_message(message.from_user.id, "Нейросеть готова ответить на ваш вопрос. Введите его")
+        bot.send_message(message.from_user.id, "Нейросеть готова ответить на ваш вопрос. Введите его",
+                         reply_markup=keyboard_cancel)
         bot.register_next_step_handler(message, free_chat)
 
     elif user.prompt == "table-table":
         bot.delete_message(message.from_user.id, msg_temp)
-        bot.send_message(message.from_user.id, "Отправьте таблицу файлом без коментариев")
+        bot.send_message(message.from_user.id, "Отправьте таблицу файлом без коментариев", reply_markup=keyboard_cancel)
         bot.register_next_step_handler(message, handle_document)
     elif user.prompt == "word-table":
         bot.delete_message(message.from_user.id, msg_temp)
-        bot.send_message(message.from_user.id, "Отправьте таблицу")
+        bot.send_message(message.from_user.id, "Отправьте таблицу", reply_markup=keyboard_cancel)
         bot.register_next_step_handler(message, handle_document)
     elif user.prompt == "close-post":
         bot.delete_message(message.from_user.id, msg_temp)
-        bot.send_message(message.from_user.id, 'Введите тему поста')
+        bot.send_message(message.from_user.id, 'Введите тему поста', reply_markup=keyboard_cancel)
         bot.register_next_step_handler(message, close_post_req)
 
 
@@ -683,21 +684,26 @@ def admin_add_prompt(message: telebot.types.Message, prompt_all: tuple) -> None:
     main_menu(message)
 
 
-
 def free_chat(message):
+    if message.text == bot_answer[lang]["cancel"]:
+        main_menu(message)
+        return
     msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
 
     messages = [{"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": message.text}]
+                {"role": "user", "content": message.text}]
     completion = client.chat.completions.create(
-            model=type_network,
-            messages=messages
-        )
+        model=type_network,
+        messages=messages
+    )
     bot.send_message(message.from_user.id, str(completion.choices[0].message.content))
     bot.delete_message(message.from_user.id, msg_temp)
 
 
 def close_post_req(message):
+    if message.text == bot_answer[lang]["cancel"]:
+        main_menu(message)
+        return
     msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
     try:
         db_sess = db_session.create_session()
@@ -720,6 +726,9 @@ def close_post_req(message):
 
 @bot.message_handler(content_types=["document"])
 def handle_document(message):
+    if message.text == bot_answer[lang]["cancel"]:
+        main_menu(message)
+        return
     msg_temp = bot.send_message(message.from_user.id, bot_answer[lang]["5s"]).message_id
     try:
         db_sess = db_session.create_session()
