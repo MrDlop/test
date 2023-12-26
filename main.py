@@ -680,6 +680,8 @@ def text_handler(message: telebot.types.Message) -> None:
     if user.prompt == "free_chat":
         bot.delete_message(message.from_user.id, msg_temp)
         bot.send_message(message.from_user.id, "Нейросеть готова ответить на ваш вопрос. Введите его")
+        bot.register_next_step_handler(message, free_chat)
+
     elif user.prompt == "table-table":
         bot.delete_message(message.from_user.id, msg_temp)
         bot.send_message(message.from_user.id, "Отправьте таблицу файлом без коментариев")
