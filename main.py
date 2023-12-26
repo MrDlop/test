@@ -58,6 +58,8 @@ def main_menu(message: telebot.types.Message) -> None:
             markup.row(upd_info)
             add_prompt = types.KeyboardButton(bot_answer[lang]['add_prompt'])
             markup.row(add_prompt)
+            go = types.KeyboardButton('Приступить к работе')
+            markup.row(go)
         elif user.company.telegram_id_chief == user.telegram_id:
             delete = types.KeyboardButton(bot_answer[lang]['del_user'])
             markup.row(delete)
@@ -113,7 +115,9 @@ def callback_message(callback: telebot.types.Message) -> None:
         keyboard.row(bot_answer[lang]["cancel"])
         bot.send_message(callback.from_user.id, bot_answer[lang]["prompt"], reply_markup=keyboard)
         bot.register_next_step_handler(callback, prompt)
-
+    elif callback.text == 'Приступить к работе':
+        text_handler(message)
+        return
     # Administration
     else:
         db_sess = db_session.create_session()
@@ -130,9 +134,7 @@ def callback_message(callback: telebot.types.Message) -> None:
             bot.send_message(callback.from_user.id, answer + bot_answer[lang]["del_user_choose"],
                              reply_markup=keyboard_cancel)
             bot.register_next_step_handler(callback, chief_delete_user_confirm)
-        elif user.company_id != 0:
-            text_handler(message)
-            return
+        
         elif callback.text == bot_answer[lang]["del"]:
             bot.send_message(callback.from_user.id, bot_answer[lang]["choose_company"], reply_markup=keyboard_cancel)
             bot.register_next_step_handler(callback, admin_delete_company)
@@ -155,9 +157,6 @@ def callback_message(callback: telebot.types.Message) -> None:
             bot.send_message(callback.from_user.id, bot_answer[lang]["input_name_company"],
                              reply_markup=keyboard_cancel)
             bot.register_next_step_handler(callback, admin_update_info)
-        else:
-            text_handler(message)
-            return
 
 
 def chief_delete_user_confirm(message: telebot.types.Message) -> None:
