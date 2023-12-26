@@ -543,7 +543,7 @@ def admin_update_limit_user(message: telebot.types.Message, data: tuple) -> None
                 bot.send_message(message.from_user.id, bot_answer[lang]["input_incorrect"])
                 main_menu(message)
                 return
-            company[0].max_num_users = data[1]
+            company.max_num_users = data[1]
             db_sess.commit()
         except ValueError:
             bot.delete_message(message.from_user.id, msg_temp)
@@ -603,7 +603,7 @@ def admin_update_date(message: telebot.types.Message, data: tuple) -> None:
                 bot.send_message(message.from_user.id, bot_answer[lang]["input_incorrect"])
                 main_menu(message)
                 return
-            company[0].set_time(time=data[1])
+            company.set_time(time=data[1])
             db_sess.commit()
         except ValueError:
             bot.delete_message(message.from_user.id, msg_temp)
